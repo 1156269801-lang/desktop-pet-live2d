@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; object-src 'none'; base-uri 'none';" />
+<title>大肥鱼</title>
+<link rel="stylesheet" href="pet.css" />
+<link rel="stylesheet" href="ui-tokens.css" />
+</head>
+<body class="pet-body">
+  <div id="app">
+    <main class="stage" id="stage">
+      <div id="sceneBackground" class="scene-background" aria-hidden="true"></div>
+      <canvas id="view"></canvas>
+      <button type="button" class="menu-button" id="menuButton" hidden title="快捷菜单（可拖动）" aria-label="打开快捷菜单" aria-controls="panel" aria-expanded="false"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <div id="bubble" class="bubble" hidden>
+        <div class="bubble-text" id="bubbleText" tabindex="0" role="status" aria-live="polite"></div>
+        <span class="bubble-tail"></span>
+      </div>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+    </main>
+
+    <section id="panel" class="panel" hidden aria-label="快捷菜单">
+      <div class="panel-head">
+        <span class="panel-dot" id="dot" aria-hidden="true"></span>
+        <span class="panel-title" id="panelCharacter">大肥鱼</span>
+        <button type="button" class="panel-close" id="btnPanelClose" title="关闭快捷菜单" aria-label="关闭快捷菜单"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="quick-actions">
+        <button type="button" id="btnChat" class="quick-action quick-primary"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 3V6a2 2 0 0 1 2-2Z"/><path d="M7 9h10M7 13h6"/></svg><span>聊天</span></button>
+        <button type="button" id="btnOpenConsole" class="quick-action"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 11 7-11 7Z"/></svg><span>动作与表情</span></button>
+        <button type="button" id="btnOpenAdvanced" class="quick-action"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16M8 4v4m8 2v4m-6 2v4"/></svg><span>高级设置</span></button>
+        <button type="button" id="btnObserve" class="quick-action quick-quiet" title="手动观察桌面情境并请求回复"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span>看屏幕</span></button>
+        <button type="button" id="btnHide" class="quick-action quick-quiet"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg><span>收起桌宠</span></button>
+      </div>
+      <details class="quick-adjust" id="quickAdjust">
+      <summary>显示与大小</summary>
+      <div class="quick-adjust-body">
+      <div class="panel-field">
+        <label class="panel-label" for="scaleX">宽度</label>
+        <div class="panel-control">
+          <input id="scaleX" type="range" min="40" max="260" step="0.5" value="100" />
+          <span class="panel-value" id="scaleXValue">100%</span>
+        </div>
+      </div>
+      <div class="panel-field">
+        <label class="panel-label" for="scaleY">高度</label>
+        <div class="panel-control">
+          <input id="scaleY" type="range" min="40" max="260" step="0.5" value="100" />
+          <span class="panel-value" id="scaleYValue">100%</span>
+        </div>
+      </div>
+
+      <label class="panel-check"><input type="checkbox" id="lockAspect" checked /> 锁定宽高比例</label>
+      <label class="panel-check"><input type="checkbox" id="bubbleToggle" checked /> 点击人物时显示气泡</label>
+
+      <div class="panel-field">
+        <label class="panel-label" for="panelOpacity">不透明度</label>
+        <div class="panel-control">
+          <input id="panelOpacity" type="range" min="25" max="100" step="1" value="90" />
+          <span class="panel-value" id="panelOpacityValue">90%</span>
+        </div>
+      </div>
+
+      </div>
+      </details>
+      <div class="quick-footer"><span id="quickStatus" role="status">可以互动</span><span>拖动标题栏移动</span></div>
+    </section>
+
+
+    <section id="chat" class="chat" hidden aria-labelledby="chatTitle">
+      <div class="chat-head" id="chatHead">
+        <span class="chat-title" id="chatTitle">和大肥鱼聊天</span>
+        <span class="chat-state" id="chatState" role="status"></span>
+        <button type="button" class="chat-close" id="btnChatClose" title="关闭聊天" aria-label="关闭聊天"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="chat-transcript">
+        <div id="chatEmpty" class="chat-empty"><strong>想说什么？</strong><span>在下方输入消息。可以拖动标题栏，调整聊天窗的位置。</span></div>
+        <div id="log" class="log" role="log" aria-label="聊天记录" aria-live="polite" tabindex="0"></div>
+      </div>
+      <form id="composer" class="composer">
+        <input id="input" type="text" placeholder="和她说点什么…" aria-label="发送给桌宠的消息" autocomplete="off" maxlength="2000" />
+        <button type="submit" id="send">发送</button>
+      </form>
+    </section>
+
+    <button type="button" id="handle" class="handle" hidden title="展开桌宠" aria-label="展开桌宠"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
+  </div>
+  <script src="parameter-policy.js"></script>
+  <script src="animation-math.js"></script>
+  <script src="appearance.js"></script>
+  <script src="director-contract.js"></script>
+  <script src="director-runtime.js"></script>
+  <script src="/engine/sampler.js"></script>
+  <script src="/engine/engine.js"></script>
+  <script src="director-markup.js"></script>
+  <script src="pet.js"></script>
+</body>
+</html>

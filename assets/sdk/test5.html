@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>cubism5 verify</title>
+<style>
+  html, body { margin: 0; background: #10161f; }
+  #report { position: fixed; left: 8px; top: 8px; color: #9fe; font: 12px/1.5 monospace; white-space: pre; }
+  canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<pre id="report">booting</pre>
+<script src="/assets/vendor/live2dcubismcore.min.js"></script>
+<script src="/assets/sdk/cubism5-framework.js"></script>
+<script src="/live2d5.js"></script>
+<script>
+  const log = (line) => { document.getElementById('report').textContent += '\n' + line }
+  const canvas = document.getElementById('view')
+  canvas.width = 400
+  canvas.height = 620
+
+  async function main() {
+    if (!window.Live2DCubismCore) throw new Error('core missing')
+    if (!window.Live2DCubismFramework) throw new Error('framework missing')
+    log('core version: 0x' + window.Live2DCubismCore.Version.csmGetVersion().toString(16))
+    const model = new window.Cubism5Model(canvas, {})
+    await model.load('/assets/model/model3.json')
+    log('loaded: canvas ' + model.canvasW + 'x' + model.canvasH + ' masks=' + model.maxMasksPerDrawable)
+    log('motions: ' + [...model.motionGroups.keys()].join(','))
+    model.playIdle()
+    let frames = 0
+    let last = performance.now()
+    const step = () => {
+      const now = performance.now()
+      const dt = Math.min((now - last) / 1000, 0.05) || 1 / 60
+      last = now
+      frames += 1
+      try {
+        model.update(dt)
+      } catch (error) {
+        if (frames < 3) log('update error: ' + error.message + ' | ' + (error.stack || '').split('\n')[1])
+      }
+      try {
+        model.draw()
+      } catch (error) {
+        if (frames < 3) log('draw error: ' + error.message + ' | ' + (error.stack || '').split('\n')[1])
+      }
+    }
+    setInterval(() => {
+      if (frames >= 3) return
+      step()
+    }, 16)
+    step()
+    setTimeout(() => {
+      log('frames: ' + frames)
+      log('log: ' + (window.__cubismLog || []).join(' | '))
+      document.title = 'ok'
+    }, 2000)
+  }
+
+  main().catch((error) => {
+    const detail = error && error.stack ? error.stack.split('\n').slice(0, 6).join('\n  ') : String(error)
+    log('FAIL ' + (error && error.message ? error.message : '') + '\n  ' + detail)
+    document.title = 'fail'
+    console.error(error)
+  })
+</script>
+</body>
+</html>

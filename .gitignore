@@ -1,0 +1,20 @@
+# 运行时与隐私（不提交）
+node_modules/
+characters/
+_private/
+_integration/
+_profile/
+smoke-out/
+_tts/
+state.json
+_pet.lock
+*.log
+*.bak
+*.bak2
+*.bak3
+*.bak4
+*.bak5
+
+# 系统
+.DS_Store
+Thumbs.db

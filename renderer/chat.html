@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+<title>聊天</title>
+<link rel="stylesheet" href="pet.css" />
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: transparent; overflow: hidden; }
+  body { display: flex; color: #1b2a44; }
+  .msg, .msg-body, .log, .composer input { color: #1b2a44; }
+  .chat-window {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--bubble-color, #f8fbff);
+    border: 2px solid #2d3f63;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .chat-head { -webkit-app-region: drag; }
+  .chat-head button { -webkit-app-region: no-drag; }
+  .chat-close {
+    width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+    padding: 0; font-size: 14px; border: 1px solid rgba(45,63,99,.25); border-radius: 6px;
+    background: transparent; color: #1b2a44; cursor: pointer;
+  }
+  .chat-close:hover { background: rgba(45,63,99,.12); }
+</style>
+</head>
+<body>
+  <div class="chat-window">
+    <div class="chat-head" id="chatHead">
+      <span class="chat-title">和大肥鱼聊天</span>
+      <button type="button" class="chat-close" id="btnClose" title="关闭">×</button>
+    </div>
+    <div id="log" class="log"></div>
+    <form id="composer" class="composer">
+      <input id="input" type="text" placeholder="和她说点什么…" autocomplete="off" maxlength="2000" />
+      <button type="submit" id="send">发送</button>
+    </form>
+  </div>
+  <script src="chat.js"></script>
+</body>
+</html>

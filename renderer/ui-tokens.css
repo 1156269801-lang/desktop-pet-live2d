@@ -1,0 +1,27 @@
+/* Shared controls for the pet's local utility windows. No remote font or icon dependency. */
+:root {
+  --ui-ink: #1b2a44;
+  --ui-muted: #52647a;
+  --ui-accent: #365f86;
+  --ui-surface: #ffffff;
+  --ui-soft: #f1f5f9;
+  --ui-line: #c6d2df;
+  --ui-focus: #176caa;
+  --ui-radius: 12px;
+  --ui-control: 36px;
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-6: 24px;
+}
+button, input, select, textarea { font: inherit; }
+button { touch-action: manipulation; }
+button:disabled { opacity: .55; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 3px; }
+input, textarea { caret-color: var(--ui-accent); }
+input::placeholder, textarea::placeholder { color: #52647a; opacity: 1; }
+::selection { background: #c9ddef; color: #10283e; }
+* { scrollbar-width: thin; scrollbar-color: #8195ad transparent; }
+.ui-icon { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }

@@ -1,0 +1,72 @@
+{
+  "window": {
+    "width": 400,
+    "height": 620,
+    "alwaysOnTop": true,
+    "skipTaskbar": true,
+    "x": null,
+    "y": null
+  },
+  "llm": {
+    "baseURL": "",
+    "model": "",
+    "temperature": 0.85,
+    "maxTokens": 400
+  },
+  "control": {
+    "port": 41968
+  },
+  "watch": {
+    "enabled": false,
+    "intervalMs": 75000,
+    "maxSilenceMs": 240000,
+    "vision": false
+  },
+  "qq": {
+    "enabled": false,
+    "wsUrl": "ws://127.0.0.1:3001",
+    "accessToken": "",
+    "selfId": "",
+    "adminQq": "",
+    "atOnly": true,
+    "replyInQQ": true,
+    "groups": []
+  },
+  "tts": {
+    "enabled": false,
+    "engine": "gpt-sovits",
+    "url": "http://127.0.0.1:9880/tts",
+    "refAudio": "",
+    "lang": "zh",
+    "refLang": "ja",
+    "sayLanguage": "ja"
+  },
+  "debug": {
+    "captureAfterMs": 0
+  },
+  "director": {
+    "enabled": false,
+    "baseURL": "",
+    "model": "",
+    "allowRemote": false,
+    "allowDiagnostics": false,
+    "tokenizerProfile": "conservative",
+    "contextTokens": 32768
+  },
+  "autonomy": {
+    "mode": "api",
+    "localLines": "",
+    "tone": "tsundere",
+    "intervalSec": 90,
+    "minSilenceSec": 45,
+    "maxCallsPerHour": 12,
+    "maxCallsPerDay": 48,
+    "sessionMinutes": 30,
+    "allowAutonomous": false,
+    "allowWindowTitle": false,
+    "allowScreenshot": false,
+    "allowOutfit": false,
+    "quietHours": true,
+    "pauseFullscreen": true
+  }
+}

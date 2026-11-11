@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+<title>快捷菜单</title>
+<link rel="stylesheet" href="pet.css" />
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  .panel-window {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    background: var(--bubble-color, #f8fbff);
+    border: 2px solid #2d3f63;
+    border-radius: 14px;
+  }
+  .panel-window button {
+    min-height: 36px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1b2a44;
+    background: #fff;
+    border: 1px solid #9cacc0;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .panel-window button:hover { background: #e8f1fa; }
+</style>
+</head>
+<body>
+  <div class="panel-window">
+    <button type="button" id="btnClose" style="text-align:center;color:#8a3b3b;">× 关闭</button>
+    <button type="button" id="btnChat">💬 聊天</button>
+    <button type="button" id="btnConsole">🎭 动作与表情</button>
+    <button type="button" id="btnSettings">⚙ 设置</button>
+    <button type="button" id="btnObserve">👁 看屏幕</button>
+    <button type="button" id="btnCollapse">🐋 收起</button>
+  </div>
+  <script src="panel.js"></script>
+</body>
+</html>

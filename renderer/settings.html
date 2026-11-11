@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+<title>高级设置</title>
+<link rel="stylesheet" href="pet.css" />
+<link rel="stylesheet" href="ui-tokens.css" />
+<link rel="stylesheet" href="settings.css" />
+<link rel="stylesheet" href="context-settings.css" />
+</head>
+<body class="settings-body settings-page">
+  <div class="settings-shell">
+    <header class="settings-head">
+      <h1 class="settings-title">高级设置</h1>
+      <button type="button" class="chat-close" id="btnClose" title="关闭设置（Esc）" aria-label="关闭设置"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15" /></svg></button>
+    </header>
+    <div class="settings-tabs" role="tablist" aria-label="设置分类">
+      <button type="button" id="settingsTabAppearance" role="tab" data-settings-tab="appearance" aria-controls="settingsPanelAppearance" aria-selected="true" tabindex="0">外观对话</button>
+      <button type="button" id="settingsTabBehavior" role="tab" data-settings-tab="behavior" aria-controls="settingsPanelBehavior" aria-selected="false" tabindex="-1">动作行为</button>
+      <button type="button" id="settingsTabCharacter" role="tab" data-settings-tab="character" aria-controls="settingsPanelCharacter" aria-selected="false" tabindex="-1">角色</button>
+      <button type="button" id="settingsTabWindow" role="tab" data-settings-tab="window" aria-controls="settingsPanelWindow" aria-selected="false" tabindex="-1">窗口</button>
+      <button type="button" id="settingsTabDirector" role="tab" data-settings-tab="director" aria-controls="settingsPanelDirector" aria-selected="false" tabindex="-1">导演 / API</button>
+    </div>
+    <main class="settings-scroll" id="settingsScroll">
+      <section class="settings-panel" id="settingsPanelAppearance" role="tabpanel" aria-labelledby="settingsTabAppearance" data-settings-panel="appearance">
+        <div class="settings-group appearance-group">
+          <h2 class="settings-group-title" id="appearanceHeading">对话与背景</h2>
+          <p class="settings-help">调整阅读大小与人物周围的留白，修改即时预览。</p>
+          <div class="appearance-preview" id="appearancePreview" aria-label="外观预览"><div class="preview-dialogue" id="dialoguePreview">在这里陪你。</div><span class="preview-caption">设置示意 · 实际效果见桌宠</span></div>
+          <div class="settings-row"><label class="settings-label" for="dialogueFontSize">对话字号</label><input type="range" id="dialogueFontSize" min="12" max="28" step="1" value="16" /><output class="modal-value" id="dialogueFontValue" for="dialogueFontSize">16 px</output></div>
+          <div class="settings-row"><label class="settings-label" for="dialogueGap">气泡距离</label><input type="range" id="dialogueGap" min="4" max="40" step="2" value="12" /><output class="modal-value" id="dialogueGapValue" for="dialogueGap">12 px</output></div>
+          <div class="settings-row preview-actions"><button type="button" class="panel-mini settings-primary" id="previewDialogue">试说一句</button><span class="settings-help">在桌宠旁查看实际效果</span></div>
+          <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>聊天窗贴近人物</span><small>手动拖动聊天窗后暂停跟随</small></span><input type="checkbox" id="chatDockToggle" checked /></label>
+        </div>
+        <details class="background-details" id="sceneBackgroundDetails">
+          <summary aria-controls="sceneBackgroundControls"><span>人物背景</span><span class="background-summary" id="sceneBackgroundSummary">纯色背景</span></summary>
+          <div class="background-controls" id="sceneBackgroundControls">
+            <div class="settings-row"><label class="settings-label" for="sceneMode">背景类型</label><select id="sceneMode"><option value="transparent">透明桌宠</option><option value="color" selected>纯色背景</option><option value="image">自定义图片</option></select><input type="color" id="sceneColor" value="#e7f0f7" aria-label="人物背景颜色" /></div>
+            <div class="settings-row settings-actions"><button type="button" class="panel-mini" id="pickSceneBackground">更换人物背景…</button><button type="button" class="panel-mini" id="clearSceneBackground">清除图片</button></div>
+            <div class="background-name" id="sceneBackgroundName">未选择图片</div>
+            <div class="settings-row"><label class="settings-label" for="sceneOpacity">不透明度</label><input type="range" id="sceneOpacity" min="20" max="100" step="5" value="90" /><output class="modal-value" id="sceneOpacityValue" for="sceneOpacity">90%</output></div>
+            <div class="settings-row"><label class="settings-label" for="sceneFit">图片适配</label><select id="sceneFit"><option value="cover">铺满（可能裁边）</option><option value="contain">完整显示</option></select></div>
+          </div>
+        </details>
+        <details class="background-details" id="bubbleBackgroundDetails">
+          <summary aria-controls="bubbleBackgroundControls"><span>对话框背景</span><span class="background-summary" id="bubbleBackgroundSummary">纯色底色</span></summary>
+          <div class="background-controls" id="bubbleBackgroundControls">
+            <p class="settings-help">气泡与聊天窗共用这组背景。</p>
+            <div class="settings-row"><label class="settings-label" for="bubbleColor">底色</label><input type="color" id="bubbleColor" value="#f8fbff" /></div>
+            <div class="settings-row settings-actions"><button type="button" class="panel-mini" id="pickBubbleBackground">更换对话框背景…</button><button type="button" class="panel-mini" id="clearBubbleBackground">清除图片</button></div>
+            <div class="background-name" id="bubbleBackgroundName">未选择图片</div>
+            <div class="settings-row"><label class="settings-label" for="bubbleTint">文字保护底色</label><input type="range" id="bubbleTint" min="70" max="100" step="2" value="82" /><output class="modal-value" id="bubbleTintValue" for="bubbleTint">82%</output></div>
+          </div>
+        </details>
+        <div class="appearance-foot"><p class="settings-help">支持 PNG / JPG / WebP，最大 12 MiB。图片只保存在本机；人物背景不额外拦截桌面点击。</p><button type="button" class="panel-mini settings-secondary" id="resetAppearance">恢复默认外观</button></div>
+      </section>
+      <section class="settings-panel" id="settingsPanelBehavior" role="tabpanel" aria-labelledby="settingsTabBehavior" data-settings-panel="behavior" hidden inert>
+        <div class="settings-group">
+          <h2 class="settings-group-title">视线与跟随</h2><p class="settings-help">眼睛先看，头部跟随，身体轻跟。</p>
+          <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>视线跟随</span><small>随鼠标调整视线与头部姿态</small></span><input type="checkbox" id="gazeToggle" checked /></label>
+          <div class="settings-row"><label class="settings-label" for="gazeRange">头部幅度</label><input type="range" id="gazeRange" class="modal-range" min="0" max="150" step="5" value="100" /><output class="modal-value" id="gazeValue" for="gazeRange">100%</output></div>
+          <div class="settings-row"><label class="settings-label" for="gazeBodyRange">身体跟随</label><input type="range" id="gazeBodyRange" class="modal-range" min="0" max="100" step="5" value="35" /><output class="modal-value" id="gazeBodyValue" for="gazeBodyRange">35%</output></div>
+          <div class="settings-row"><label class="settings-label" for="gazeSpeedRange">反应速度</label><input type="range" id="gazeSpeedRange" class="modal-range" min="50" max="200" step="10" value="100" /><output class="modal-value" id="gazeSpeedValue" for="gazeSpeedRange">100%</output></div>
+          <p class="modal-hint" id="gazeBindingInfo">幅度为相对模型输入，不代表旋转角度；设置自动保存。</p>
+        </div>
+        <div class="settings-group settings-divider">
+          <h3 class="settings-group-title">说话</h3>
+          <div class="settings-row"><label class="settings-label" for="ttsSayLanguage">说话语言</label><select id="ttsSayLanguage"><option value="ja">日语（语音）</option><option value="zh">中文（语音）</option></select></div>
+          <p class="modal-hint">气泡始终显示中文；这里选择语音合成用哪种语言。</p>
+        </div>
+        <div class="settings-group settings-divider">
+          <h3 class="settings-group-title">待机与互动</h3>
+          <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>待机表演</span><small>自动穿插待机动作</small></span><input type="checkbox" id="directorToggle" checked /></label>
+          <div class="settings-row"><label class="settings-label" for="breathRange">自动呼吸</label><input type="range" id="breathRange" class="modal-range" min="0" max="150" step="5" value="100" /><output class="modal-value" id="breathValue" for="breathRange">100%</output></div>
+          <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>主动巡视</span><small>按已有巡视配置定时观察当前活动</small></span><input type="checkbox" id="watchToggle" /></label>
+        </div>
+      </section>
+      <section class="settings-panel" id="settingsPanelCharacter" role="tabpanel" aria-labelledby="settingsTabCharacter" data-settings-panel="character" hidden inert>
+        <div class="settings-group"><h2 class="settings-group-title">选择角色</h2><p class="settings-help">点击角色切换。当前角色会标注“使用中”。</p><div class="character-grid" id="characterGrid" aria-label="可用角色" aria-busy="true"></div></div>
+        <div class="settings-group settings-divider"><h3 class="settings-group-title">导入角色</h3>
+          <div class="dropzone" id="dropZone"><div class="dropzone-text">把角色压缩包拖到这里</div><div class="dropzone-hint">支持 .zip（Live2D 模型包）</div><button type="button" class="panel-mini" id="chooseCharacterFile">选择 ZIP 文件…</button><input type="file" id="characterZipInput" accept=".zip,application/zip" hidden /></div>
+          <div class="dropzone-status" id="status" role="status" aria-live="polite"></div>
+        </div>
+      </section>
+      <section class="settings-panel" id="settingsPanelWindow" role="tabpanel" aria-labelledby="settingsTabWindow" data-settings-panel="window" hidden inert>
+        <div class="settings-group"><h2 class="settings-group-title">桌宠窗口</h2><p class="settings-help">只调整绘制区域，不放大人物；上限随当前屏幕自动限制。人物大小在快捷菜单中调整。</p>
+          <div class="settings-row"><label class="settings-label" for="winWidthRange">窗口宽度</label><input type="range" id="winWidthRange" class="modal-range" min="500" max="2400" step="20" value="1126" /><output class="modal-value" id="winWidthValue" for="winWidthRange">1126</output></div>
+          <div class="settings-row"><label class="settings-label" for="winHeightRange">窗口高度</label><input type="range" id="winHeightRange" class="modal-range" min="600" max="1300" step="20" value="1197" /><output class="modal-value" id="winHeightValue" for="winHeightRange">1197</output></div>
+          <div class="settings-row settings-actions window-actions"><button type="button" class="panel-mini" id="btnSaveDefault">保存模型大小为默认</button><button type="button" class="panel-mini" id="btnResetDefault">恢复默认大小</button><button type="button" class="panel-mini" id="btnResetModelPos">模型回到右下角</button><button type="button" class="panel-mini" id="btnCollapse">收起成小球</button></div>
+        </div>
+        <div class="settings-group settings-divider"><h3 class="settings-group-title">桌面交互</h3>
+          <div class="settings-row"><label class="settings-label" for="snapRange">边缘吸附</label><input type="range" id="snapRange" class="modal-range" min="0" max="120" step="4" value="24" /><output class="modal-value" id="snapValue" for="snapRange">24px</output></div>
+          <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>整块鼠标穿透</span><small>Ctrl + Alt + P 可切换穿透状态</small></span><input type="checkbox" id="clickThroughToggle" /></label>
+          <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>开机自启</span><small>随系统启动桌宠；不会自动恢复自主 API 会话</small></span><input type="checkbox" id="autostartToggle" /></label>
+        </div>
+      </section>
+      <section class="settings-panel director-panel" id="settingsPanelDirector" role="tabpanel" aria-labelledby="settingsTabDirector" data-settings-panel="director" hidden inert>
+        <div class="sub-tabs" id="directorSubTabs" role="tablist" aria-label="导演设置分类">
+          <button type="button" data-subtab="persona" class="sub-tab active">人设</button>
+          <button type="button" data-subtab="memory" class="sub-tab">记忆</button>
+          <button type="button" data-subtab="autonomy" class="sub-tab">自主</button>
+          <button type="button" data-subtab="api" class="sub-tab">API</button>
+        <button type="button" data-subtab="tts" class="sub-tab">TTS</button>
+        </div>
+        <section class="settings-group persona-group" id="personaControls" data-subpanel="persona" aria-labelledby="personaHeading" aria-busy="true">
+          <div class="persona-heading"><h2 class="settings-group-title" id="personaHeading">统一人设</h2><span class="persona-revision" id="personaRevision">正在读取</span></div>
+          <p class="settings-help" id="personaPrivacyHelp">聊天与 API 自主陪伴共用此处的人设。填写的内容会随已授权请求发送给你选择的 API；不要填写密钥或不愿发送的私密信息。离线规则不理解自由人设。</p>
+          <div class="persona-field-grid">
+            <label class="director-field" for="personaName"><span>名字</span><input type="text" id="personaName" maxlength="40" required autocomplete="off" disabled /></label>
+            <label class="director-field" for="personaAddress"><span>对你的称呼 <small>可留空</small></span><input type="text" id="personaAddress" maxlength="40" autocomplete="off" disabled /></label>
+          </div>
+          <label class="director-field persona-role" for="personaRole"><span>身份与角色</span><input type="text" id="personaRole" maxlength="160" required autocomplete="off" disabled /></label>
+          <div class="persona-field-grid">
+            <label class="director-field" for="personaWarmth"><span>温和程度</span><select id="personaWarmth" disabled><option value="gentle">温柔</option><option value="neutral">平和</option><option value="lively">活泼</option></select></label>
+            <label class="director-field" for="personaPlayfulness"><span>俏皮程度</span><select id="personaPlayfulness" disabled><option value="low">克制</option><option value="medium">适中</option><option value="high">俏皮</option></select></label>
+            <label class="director-field" for="personaInitiative"><span>主动程度</span><select id="personaInitiative" disabled><option value="restrained">克制陪伴</option><option value="balanced">适度主动</option></select></label>
+            <label class="director-field" for="personaLength"><span>回复长短</span><select id="personaLength" disabled><option value="short">简短</option><option value="normal">正常</option></select></label>
+          </div>
+          <details class="background-details persona-details" id="personaAdvanced">
+            <summary><span>补充风格与旧版设定导入</span></summary>
+            <label class="director-field" for="personaStyleNotes"><span>补充风格 <small>最多 2000 字；不能改变安全权限</small></span><textarea id="personaStyleNotes" rows="4" maxlength="2000" aria-describedby="personaPrivacyHelp" spellcheck="false" disabled></textarea></label>
+            <p class="settings-help">未在此编辑的口头禅、回避用语、陪伴与幽默字段会原样保留。人设保存在本机加密文件中；加密不防同一 Windows 账户的其他程序。</p>
+            <div class="persona-legacy" id="personaLegacyChatGroup" hidden><p class="settings-help">旧聊天设定（仅供选择，不会自动生效）</p><pre class="persona-legacy-text" id="personaLegacyChatText"></pre><button type="button" class="panel-mini" id="personaImportChat" disabled>选用此旧源</button></div>
+            <div class="persona-legacy" id="personaLegacyAutonomyGroup" hidden><p class="settings-help">旧自主人设（仅供选择，不会自动生效）</p><pre class="persona-legacy-text" id="personaLegacyAutonomyText"></pre><button type="button" class="panel-mini" id="personaImportAutonomy" disabled>选用此旧源</button></div>
+            <p class="settings-help" id="personaLegacyHint">正在检查可选导入项。两个旧源选其一，不自动拼接；已有补充风格草稿请先手动清空。确认保存后才生效，不删除旧文件。</p>
+          </details>
+          <div class="persona-actions"><button type="button" class="panel-mini settings-primary" id="personaSave" disabled>查看差异并保存</button><button type="button" class="panel-mini settings-secondary" id="personaRefresh">刷新状态</button></div>
+          <p class="director-status" id="personaStatus" role="status" aria-live="polite" aria-atomic="true">正在读取人设…</p>
+          <p class="settings-help persona-draft-state" id="personaDraftState">保存会停止当前手动与自主表演；需要手动重新开始。</p>
+          <button type="button" class="panel-mini settings-secondary" id="personaReload" hidden disabled>丢弃草稿并载入最新…</button>
+          <details class="background-details persona-details" id="personaHistoryDetails"><summary><span>版本与恢复</span></summary>
+            <p class="settings-help">最多保留 5 个已保存版本（含当前）。回滚或恢复默认都会产生新版本，不会启动表演。</p>
+            <label class="director-field" for="personaHistory"><span>选择历史版本</span><select id="personaHistory" disabled><option value="">尚无历史版本</option></select></label>
+            <div class="persona-actions"><button type="button" class="panel-mini" id="personaRollback" disabled>回滚至所选版本…</button><button type="button" class="panel-mini settings-secondary" id="personaReset" disabled>恢复默认人设…</button></div>
+          </details>
+          <div class="persona-confirmation" id="personaConfirmation" role="group" aria-labelledby="personaConfirmationTitle" hidden>
+            <h3 id="personaConfirmationTitle" tabindex="-1">确认人设变更</h3><ul id="personaDiffList"></ul>
+            <p class="settings-help" id="personaConfirmHelp">仅保存，不会调用模型。当前表演和自主会话将停止，需手动重新开始。</p>
+            <div class="persona-actions"><button type="button" class="panel-mini" id="personaCancelConfirm">继续编辑</button><button type="button" class="panel-mini settings-primary" id="personaConfirm" disabled>确认保存</button></div>
+          </div>
+        </section>
+        <section class="settings-group settings-divider memory-group" id="memoryControls" data-subpanel="memory" aria-labelledby="memoryHeading" aria-busy="true">
+          <div class="memory-heading"><h2 class="settings-group-title" id="memoryHeading">显式事实 · 称呼、偏好、兴趣</h2><span class="memory-count" id="memoryCount">正在读取</span></div>
+          <p class="settings-help" id="memoryPrivacyHelp">只保存你确认填写的内容；不会自动记下聊天；默认仅本机；自主导演和 DSH 不读取这些记忆。</p>
+          <details class="background-details memory-details" id="memoryDetails">
+            <summary id="memorySummary"><span>管理已确认的记忆</span></summary>
+            <p class="settings-help" id="memoryDestination">正在读取可授权的 API 目的地…</p>
+            <p class="settings-help" id="memoryRetrievalHelp">已授权条目可用于“我通常喝哪种咖啡”“我更喜欢怎样的回答”等明确的个人问题。每次最多选 3 条；问候、无关问题与未命中时不附加记忆。不是自动学习或经历回忆。</p>
+            <p class="settings-help memory-empty" id="memoryEmpty">尚未读取记忆。</p>
+            <ul class="memory-list" id="memoryList" aria-label="已确认的记忆条目"></ul>
+            <div class="memory-actions"><button type="button" class="panel-mini" id="memoryNew" disabled>新增 / 清空草稿</button><button type="button" class="panel-mini settings-secondary" id="memoryRefresh">刷新状态</button></div>
+            <p class="settings-help" id="memoryEditorHeading">新增一条记忆</p>
+            <div class="memory-field-grid">
+              <label class="director-field" for="memoryKind"><span>类别</span><select id="memoryKind" disabled><option value="name">名字 / 称呼</option><option value="preference">偏好</option><option value="interest">兴趣</option></select></label>
+              <label class="director-field" for="memoryTtlDays"><span>有效期</span><select id="memoryTtlDays" disabled><option value="1">1 天</option><option value="7">7 天</option><option value="30" selected>30 天</option><option value="90">90 天</option></select></label>
+              <label class="director-field" for="memoryImportance"><span>重要度 · 你来选择</span><select id="memoryImportance" disabled><option value="0">0 · 较低</option><option value="1" selected>1 · 普通</option><option value="2">2 · 重要</option><option value="3">3 · 优先</option></select></label>
+            </div>
+            <label class="director-field" for="memoryText"><span>你确认要记住的内容</span><textarea id="memoryText" rows="3" maxlength="400" aria-describedby="memoryTextCount memorySensitiveHelp" placeholder="例如：小鲸（昵称）" spellcheck="false" disabled></textarea></label>
+            <p class="settings-help memory-text-count" id="memoryTextCount">0 / 200 字符 · 0 / 512 UTF-8 字节</p>
+            <p class="settings-help" id="memorySensitiveHelp">不要填写密钥、助记词、银行卡号、联系方式或身份证件。敏感信息过滤只是启发式检查，不能保证发现所有私密信息。升级后识别出的疑似敏感旧记录会禁止用于模型，但仍可更正、撤权或删除。</p>
+            <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>长期保留这条记忆</span><small>默认关闭并在 30 天到期；开启后不自动到期，仍可手动删除</small></span><input type="checkbox" id="memoryPinned" disabled /></label>
+            <label class="settings-row settings-toggle memory-consent"><span class="settings-option-copy"><span>允许手动聊天按问题发送这一条</span><small>默认关闭。仅允许本机手动聊天在相关问题中发送给下方目的地；不会自动用于自主导演或 DSH。编辑后需重新勾选确认。</small></span><input type="checkbox" id="memoryUseInChat" aria-describedby="memoryConsentDestination" disabled /></label>
+            <p class="settings-help" id="memoryConsentDestination">仅本机，尚未授予云端使用权限。</p>
+            <div class="memory-actions"><button type="button" class="panel-mini settings-primary" id="memorySave" disabled>预览并确认保存</button><button type="button" class="panel-mini settings-secondary" id="memoryReload" hidden disabled>丢弃草稿并载入最新…</button></div>
+            <p class="settings-help" id="memoryDraftState">保存只写入本机，不会立即发送给模型。</p>
+            <div class="memory-actions memory-management"><button type="button" class="panel-mini settings-secondary" id="memoryRevoke" disabled>撤回全部云端授权…</button><button type="button" class="panel-mini memory-danger" id="memoryClear" disabled>清空全部记忆…</button></div>
+            <p class="settings-help" id="memoryDeletionHelp">最多 40 条事实、累计 216 次确认（含更正与重新授权，删除不重置），另留 40 个 ID 用于安全撤权。旧 v1 记录保持可管理，重要度默认 1；明确保存才生成 v2 新记录。删除与撤权可阻止后续使用；不能撤回已发送的内容，不能擦除外部备份、DSH 或服务商历史。编辑和撤权会生成新 ID；在当前删除账本有效时，旧 ID 不会恢复。同时恢复记忆文件与删除账本两个旧文件，或恢复整个旧目录，不在此保证范围内。</p>
+            <div class="memory-confirmation" id="memoryConfirmation" role="group" aria-labelledby="memoryConfirmationTitle" hidden>
+              <h3 id="memoryConfirmationTitle" tabindex="-1">确认记忆变更</h3><ul id="memoryDiffList"></ul>
+              <p class="settings-help" id="memoryConfirmHelp">只有确认后才提交；取消不会改动已保存内容。</p>
+              <div class="memory-actions"><button type="button" class="panel-mini" id="memoryCancelConfirm">取消 / 继续编辑</button><button type="button" class="panel-mini settings-primary" id="memoryConfirm" disabled>确认</button></div>
+            </div>
+          </details>
+          <p class="director-status" id="memoryStatus" role="status" aria-live="polite" aria-atomic="true">正在读取显式记忆…</p>
+        </section>
+        <section class="settings-group settings-divider memory-group memory-library" id="memoryLibraryControls" data-subpanel="memory" aria-labelledby="memoryLibraryHeading" aria-busy="true">
+          <div class="memory-heading"><h2 class="settings-group-title" id="memoryLibraryHeading">事件、摘要与表达建议</h2><span class="memory-count" id="memoryLibraryCount">正在读取</span></div>
+          <p class="settings-help">只接收你在这里确认的记录，不自动收集聊天或窗口。与上方事实库独立；摘要与建议默认仅本机。</p>
+          <details class="background-details" id="memoryLibraryDetails">
+            <summary>管理事件与来源</summary>
+            <p class="settings-help" id="memoryLibraryDestination">正在读取目的地…</p>
+            <p class="settings-help" id="memoryLibraryLimits">事件 200 条 · 三级活动摘要 50 / 12 / 4 条 · 建议 10 条</p>
+            <div class="memory-actions"><button type="button" class="panel-mini settings-secondary" id="memoryLibraryRefresh">刷新状态</button><button type="button" class="panel-mini settings-secondary" id="memoryLibraryReload" hidden disabled>丢弃草稿并载入最新…</button></div>
+            <details class="background-details memory-library-editor" id="memoryEventDetails">
+              <summary id="memoryEventHeading">新增一条明确事件</summary>
+              <label class="director-field" for="memoryEventText"><span>你确认的事件正文</span><textarea id="memoryEventText" rows="3" maxlength="400" aria-describedby="memoryEventCount memoryLibraryPrivacy" placeholder="例如：我完成了一次合成练习（仅写你确认的事实）" spellcheck="false" disabled></textarea></label>
+              <p class="settings-help memory-text-count" id="memoryEventCount">0 / 200 字符 · 0 / 512 UTF-8 字节</p>
+              <div class="memory-field-grid">
+                <label class="director-field" for="memoryEventOccurred"><span>实际发生时间 · 可留空</span><input type="datetime-local" id="memoryEventOccurred" disabled /></label>
+                <label class="director-field" for="memoryEventImportance"><span>重要度 · 你来选择</span><select id="memoryEventImportance" disabled><option value="0">0 · 较低</option><option value="1" selected>1 · 普通</option><option value="2">2 · 重要</option><option value="3">3 · 优先</option></select></label>
+                <label class="director-field" for="memoryEventTtl"><span>有效期</span><select id="memoryEventTtl" disabled><option value="1">1 天</option><option value="7">7 天</option><option value="30" selected>30 天</option><option value="90">90 天</option></select></label>
+              </div>
+              <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>长期保留这一条事件</span><small>默认关闭；留空发生时间不会拿确认时间代替。更正来源会使派生摘要和建议失效。</small></span><input type="checkbox" id="memoryEventPinned" disabled /></label>
+              <div class="memory-actions"><button type="button" class="panel-mini settings-primary" id="memoryEventSave" disabled>预览并确认事件</button><button type="button" class="panel-mini settings-secondary" id="memoryEventNew" disabled>清空草稿…</button></div>
+            </details>
+            <p class="settings-help" id="memoryLibraryPrivacy">不填写密钥、助记词、银行卡、联系方式或证件。敏感检查是启发式，不能识别全部隐私。保存不调用模型。</p>
+            <p class="settings-help" id="memoryLibraryEmpty">尚未读取事件。</p>
+            <ul class="memory-list memory-library-list" id="memoryLibraryList" aria-label="事件和摘要，可选择用于压缩或建议"></ul>
+            <p class="settings-help" id="memoryLibrarySelection">选择 2–8 条来源；压缩要求同一层。</p>
+            <div class="memory-actions"><button type="button" class="panel-mini" id="memoryLibraryPreview" disabled>预览同层压缩</button><button type="button" class="panel-mini" id="memoryLibrarySuggest" disabled>生成本地表达建议</button></div>
+            <div class="memory-confirmation" id="memoryLibraryPreviewBox" hidden>
+              <h3 tabindex="-1" id="memoryLibraryPreviewHeading">核对有损摘要</h3>
+              <p class="settings-help" id="memoryLibraryLosses"></p>
+              <label class="director-field" for="memoryLibrarySummaryText"><span>摘要正文 · 可先修订</span><textarea id="memoryLibrarySummaryText" rows="4" maxlength="400" disabled></textarea></label>
+              <label class="director-field" for="memoryLibrarySummaryImportance"><span>摘要重要度</span><select id="memoryLibrarySummaryImportance" disabled><option value="0">0 · 较低</option><option value="1" selected>1 · 普通</option><option value="2">2 · 重要</option><option value="3">3 · 优先</option></select></label>
+              <p class="settings-help">这是有损摘录，不保证全部语义。确认后所选来源正文将移除，只保留无正文谱系；固定事实不变，新摘要不继承云端授权。</p>
+              <div class="memory-actions"><button type="button" class="panel-mini settings-primary" id="memoryLibraryConsolidate" disabled>核对后确认压缩…</button><button type="button" class="panel-mini" id="memoryLibraryCancelPreview">取消预览</button></div>
+            </div>
+            <details class="background-details" id="memoryLibrarySuggestionDetails">
+              <summary>表达建议 · 不改变核心人设或权限</summary>
+              <p class="settings-help">只识别至少两条确认来源中明确的“简短回答 / 减少提问”。接受仅影响之后本地试演；仅本次只供下一次本地试演消费。不会从模型回复自强化。</p>
+              <p class="settings-help" id="memoryLibrarySuggestionEmpty">尚无表达建议。</p>
+              <ul class="memory-list" id="memoryLibrarySuggestions" aria-label="待确认与已接受的表达建议"></ul>
+            </details>
+            <details class="background-details" id="memoryLibraryLineageDetails">
+              <summary>无正文来源与级联删除</summary>
+              <label class="director-field" for="memoryLibrarySource"><span>选择来源 ID · 含已消费的来源</span><select id="memoryLibrarySource" disabled><option value="">尚无来源</option></select></label>
+              <div class="memory-actions"><button type="button" class="panel-mini" id="memoryLibraryCorrectSource" disabled>更正所选事件来源…</button><button type="button" class="panel-mini memory-danger" id="memoryLibraryDeleteSource" disabled>预览删除来源及派生内容…</button></div>
+              <p class="settings-help">压缩消费不等于用户删除。来源删除、更正或到期会级联撤销派生摘要与建议；谱系不保存原正文。累计来源 ID 最多 2048 个，删除不重置，不无限归档。</p>
+            </details>
+            <div class="memory-actions memory-management"><button type="button" class="panel-mini settings-secondary" id="memoryLibraryRevoke" disabled>撤回整个事件库云端授权…</button></div>
+            <p class="settings-help">每条授权需绑定当前目的地再次确认；默认不用于自主导演或 DSH。撤权保留本地正文，不能撤回已经发送的内容。当前删除账本缺失或损坏时停止使用；同时恢复主文件和账本的旧版本不在防恢复保证范围内。</p>
+            <div class="memory-confirmation" id="memoryLibraryConfirmation" role="group" aria-labelledby="memoryLibraryConfirmHeading" hidden>
+              <h3 id="memoryLibraryConfirmHeading" tabindex="-1">确认事件库变更</h3><ul id="memoryLibraryDiff"></ul>
+              <div class="memory-actions"><button type="button" class="panel-mini" id="memoryLibraryCancel">取消 / 继续编辑</button><button type="button" class="panel-mini settings-primary" id="memoryLibraryConfirm" disabled>确认</button></div>
+            </div>
+          </details>
+          <p class="director-status" id="memoryLibraryStatus" role="status" aria-live="polite" aria-atomic="true">正在读取事件库…</p>
+        </section>
+        <section class="settings-group settings-divider autonomy-group" id="autonomyControls" data-subpanel="autonomy" aria-labelledby="autonomyHeading">
+          <div class="autonomy-heading"><h2 class="settings-group-title" id="autonomyHeading">自主陪伴</h2><span class="autonomy-phase" id="autonomyPhase">正在读取</span></div>
+          <p class="settings-help autonomy-intro">先保存设定，再手动开始。保存不联网、不启动；重启、锁屏、睡眠及恢复后都不会自动续跑。</p>
+          <div class="autonomy-mode-row">
+            <label class="director-field" for="autonomyMode"><span>运行方式</span><select id="autonomyMode" aria-describedby="autonomyModeHelp" disabled><option value="rules">离线规则 · 不联网</option><option value="api">API 事件触发 · 可能计费</option></select></label>
+            <label class="director-field" for="autonomyTone"><span>陪伴语气</span><select id="autonomyTone" disabled><option value="caring">温柔关心</option><option value="tsundere">轻傲娇</option><option value="quiet">安静克制</option></select></label>
+          </div>
+          <p class="settings-help persona-source">API 人设统一使用上方已保存版本，不再维护单独副本。<button type="button" class="persona-source-link" id="autonomyEditPersona">编辑统一人设</button></p>
+          <p class="settings-help autonomy-mode-help" id="autonomyModeHelp">离线模式按规则选择语气与自定义台词，不理解任意人设，也不调用模型。</p>
+          <label class="settings-row settings-toggle autonomy-consent"><span class="settings-option-copy"><span>允许桌宠自主发起对话与动作</span><small>独立于下方单次远程授权。API 模式遇到符合条件的新事件才请求，可能产生费用；发送统一人设、会话短期上下文及所选感知，不读取上方显式记忆库。无事件不调用模型。</small></span><input type="checkbox" id="autonomyAllowAutonomous" aria-describedby="autonomyModeHelp" disabled /></label>
+          <div class="autonomy-actions" role="group" aria-label="自主运行控制">
+            <button type="button" class="panel-mini" id="autonomySave" disabled>保存设定</button><button type="button" class="panel-mini" id="autonomyOnce" disabled>仅运行一轮</button>
+            <button type="button" class="panel-mini settings-primary" id="autonomyStart" disabled>开始自主运行</button><button type="button" class="panel-mini autonomy-stop" id="autonomyStop" disabled>立即停止</button>
+          </div>
+          <dl class="autonomy-metrics" aria-label="自主运行状态">
+            <div><dt>下次条件检查</dt><dd id="autonomyNextRun">尚未启动</dd></div><div><dt>会话剩余</dt><dd id="autonomySessionRemaining">尚未启动</dd></div>
+            <div><dt>API 次数 / 滚动 1 小时上限</dt><dd id="autonomyCallCount">未核验 / 12</dd></div><div><dt>API 次数 / 滚动 24 小时上限</dt><dd id="autonomyDailyCallCount">未核验 / 48</dd></div>
+            <div><dt>已运行 / 已开口</dt><dd id="autonomyRoundCount">0 / 0</dd></div><div><dt>最近触发事件</dt><dd id="autonomyLastEvent">尚无已执行事件</dd></div>
+            <div><dt>虚拟角色节奏</dt><dd id="autonomyLifeState">尚未读取</dd></div><div><dt>角色节奏倍率</dt><dd id="autonomyPace">尚未读取</dd></div>
+          </dl>
+          <p class="settings-help" id="autonomyBudgetState">调用账本尚未核验；次数上限不是费用预算。</p>
+          <p class="settings-help">能量与困倦只是角色自身的虚拟作息数值，用于控制频率、动作与句子长度；不表示你的情绪，也不要求你照顾她。</p>
+          <p class="director-status autonomy-status" id="autonomyStatus" role="status" aria-live="polite" aria-atomic="true">正在读取自主设置…</p>
+          <div class="autonomy-state-foot"><p class="settings-help" id="autonomyDraftState">保存设定不会启动或联网。</p><button type="button" class="panel-mini settings-secondary" id="autonomyRefresh">刷新状态</button></div>
+          <details class="background-details autonomy-details" id="autonomyFrequencyDetails">
+            <summary><span>台词、频率与会话边界</span></summary>
+            <label class="director-field" for="autonomyLocalLines"><span>离线自定义台词 <small>每行一句，合计最多 2000 字</small></span><textarea id="autonomyLocalLines" rows="3" maxlength="2000" placeholder="歇一小会儿也没关系。&#10;我在这里陪着你。" spellcheck="false" disabled></textarea></label>
+            <p class="settings-help">离线规则使用语气与这些台词，也可结合已授权的标题做本地场景判断，不理解任意人设；不填写时使用内置台词。</p>
+            <div class="autonomy-number-grid">
+              <label class="director-field" for="autonomyIntervalSec"><span>条件检查间隔（秒）</span><input type="number" id="autonomyIntervalSec" min="30" max="1800" step="1" value="90" disabled /></label>
+              <label class="director-field" for="autonomyMinSilenceSec"><span>最短安静时间（秒）</span><input type="number" id="autonomyMinSilenceSec" min="20" max="3600" step="1" value="45" disabled /></label>
+              <label class="director-field" for="autonomyMaxCallsPerHour"><span>API 每小时调用上限</span><input type="number" id="autonomyMaxCallsPerHour" min="1" max="120" step="1" value="12" disabled /></label>
+              <label class="director-field" for="autonomyMaxCallsPerDay"><span>API 滚动 24 小时次数上限</span><input type="number" id="autonomyMaxCallsPerDay" min="1" max="240" step="1" value="48" aria-describedby="autonomyBudgetState" disabled /></label>
+              <label class="director-field" for="autonomySessionMinutes"><span>本次会话（分钟，最多 8 小时）</span><input type="number" id="autonomySessionMinutes" min="5" max="480" step="1" value="30" disabled /></label>
+            </div>
+            <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>夜间降低频率</span><small>00–06 点降频，仍可能调用 API 并产生费用；不是暂停</small></span><input type="checkbox" id="autonomyQuietHours" checked disabled /></label>
+            <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>全屏时暂停</span><small>检测到全屏应用时暂停自主尝试</small></span><input type="checkbox" id="autonomyPauseFullscreen" checked disabled /></label>
+          </details>
+          <details class="background-details autonomy-details" id="autonomyPrivacyDetails">
+            <summary><span>感知与装扮权限 · 默认关闭</span></summary>
+            <p class="settings-help">以下权限默认关闭，不会随模式切换自动勾选。已授权标题在离线规则模式仅用于本地场景判断；API 模式才会发送到配置服务。截图仅 API 模式可用，且需单独同意。</p>
+            <label class="settings-row settings-toggle autonomy-consent"><span class="settings-option-copy"><span>允许读取前台窗口标题</span><small>默认不读取。标题可能包含文件名、网页标题或私人信息；离线仅在本机判断场景，API 自主运行时会发送到配置服务。</small></span><input type="checkbox" id="autonomyAllowWindowTitle" disabled /></label>
+            <label class="settings-row settings-toggle autonomy-consent"><span class="settings-option-copy"><span>允许截取主屏幕</span><small>仅 API 模式：可能包含整个主屏的聊天、文件与其他敏感信息，并发送到配置服务；仅支持视觉（vision）的模型可用。发送后受服务商规则约束。</small></span><input type="checkbox" id="autonomyAllowScreenshot" disabled /></label>
+            <label class="settings-row settings-toggle autonomy-consent"><span class="settings-option-copy"><span>允许自主改变装扮</span><small>允许模型选择已支持的服装与饰品变化；关闭时不能由自主计划改变装扮。</small></span><input type="checkbox" id="autonomyAllowOutfit" disabled /></label>
+            <p class="settings-help">不要在人设或台词中填写 API 密钥。专用密码框的内容不会被加入人设、模型提示词或页面 localStorage。停止只能阻止后续执行，已发出的内容与费用无法撤回。</p>
+          </details>
+        </section>
+        <div class="settings-group settings-divider" data-subpanel="autonomy">
+          <h2 class="settings-group-title">让桌宠配合你的表达</h2>
+          <p class="settings-help director-recommendation"><strong>推荐：由外部 Agent 担任导演。</strong>外部 Agent 可通过本机控制 API 编排动作；桌宠端不需要填写模型密钥。下方直连接入是可选项，默认关闭。</p>
+          <dl class="director-state-grid">
+            <dt>角色能力</dt><dd id="directorCapabilities">正在读取…</dd>
+            <dt>隐私状态</dt><dd id="directorPrivacyState">尚未读取，不会自动调用远程服务</dd>
+            <dt>表演状态</dt><dd id="directorRunningState">正在读取…</dd>
+          </dl>
+          <button type="button" class="panel-mini settings-secondary" id="directorRefresh">刷新状态</button>
+          <p class="director-status" id="directorStatus" role="status" aria-live="polite" aria-atomic="true">正在读取导演设置…</p>
+        </div>
+
+        <div class="settings-group settings-divider" data-subpanel="api">
+          <h3 class="settings-group-title">导演试演</h3>
+          <p class="settings-help" id="directorPreviewHelp">远程试演使用统一人设与下方本次输入；不会附带聊天历史或自动截图。本地预演不调用远程模型。</p>
+          <label class="director-field" for="directorText"><span>本次台词或表演要求</span><textarea id="directorText" rows="4" maxlength="2000" placeholder="例如：开心地挥手，欢迎我回来。" aria-describedby="directorPreviewHelp" spellcheck="false" disabled></textarea></label>
+          <div class="settings-row settings-actions director-preview-actions">
+            <button type="button" class="panel-mini settings-primary" id="directorPreviewLocal" disabled>本地预演</button>
+            <button type="button" class="panel-mini" id="directorPreviewRemote" aria-describedby="directorRemoteHint" disabled>调用配置API并表演</button>
+          </div>
+          <p class="settings-help" id="directorRemoteHint">远程调用需要保存配置、启用直连接入、授权本次输入，并保存密钥。</p>
+          <button type="button" class="panel-mini settings-secondary" id="directorCancel" disabled>停止表演</button>
+          <p class="director-status" id="directorPreviewStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+        </div>
+
+        <div class="settings-group settings-divider" data-subpanel="api">
+          <h3 class="settings-group-title">直接接入模型（可选）</h3>
+          <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>启用直接接入</span><small>默认关闭；开启和保存配置都不会自动联网</small></span><input type="checkbox" id="directorEnabled" disabled /></label>
+          <label class="director-field" for="directorBaseURL"><span>服务地址（baseURL）</span><input type="url" id="directorBaseURL" placeholder="https://服务商地址/v1" maxlength="1000" autocomplete="off" spellcheck="false" disabled /></label>
+          <label class="director-field" for="directorModel"><span>模型名称</span><input type="text" id="directorModel" placeholder="填写服务商提供的模型名称" maxlength="128" autocomplete="off" spellcheck="false" disabled /></label>
+          <label class="director-field" for="directorTokenizerProfile"><span>输入预算计量</span><select id="directorTokenizerProfile" disabled><option value="conservative">通用保守预算（UTF-8 字节代理）</option><option value="deepseek-v4">DeepSeek V4 离线分词器（仅匹配的模型）</option></select></label>
+          <label class="director-field" for="directorContextTokens"><span>上下文总预算</span><input id="directorContextTokens" type="number" min="4096" max="1048576" step="1" value="32768" disabled /></label>
+          <p class="settings-help">整体计入系统协议、人设、本次文字、记忆与感知文字，预留 1800 输出和 512 封装余量。通用模式用字节作保守代理，不是精确 token；指定分词器也不等于服务端计费。请按实际模型上限设置。截图另设 4 MiB 上限，DeepSeek V4 文字分词模式不接受截图。</p>
+          <label class="settings-row settings-toggle director-consent"><span class="settings-option-copy"><span>允许向指定服务商发送对话</span><small>默认关闭。本机聊天与试演发送统一人设、本次文字，以及单独授权且相关的显式记忆；不附带聊天历史或截图。自主 API 还需上方独立授权并手动启动，只发送当前会话短期上下文和已授权感知，不读取显式记忆库。</small></span><input type="checkbox" id="directorAllowRemote" disabled /></label>
+          <div class="settings-row settings-actions"><button type="button" class="panel-mini" id="directorSaveConfig" disabled>保存配置</button></div>
+          <p class="settings-help" id="directorDraftState">配置需手动保存；保存不会发起远程调用。</p>
+
+          <h4 class="director-subtitle">API 密钥</h4>
+          <p class="settings-help" id="directorKeyState">正在读取本机密钥状态…</p>
+          <label class="director-field" for="directorApiKey"><span>输入新密钥</span><input type="password" id="directorApiKey" autocomplete="off" spellcheck="false" maxlength="8192" aria-describedby="directorKeyHelp directorKeyState" placeholder="已保存的密钥不会回显" disabled /></label>
+          <p class="settings-help" id="directorKeyHelp">使用本机加密存储，不写入页面 localStorage。提交后立即清空输入框；需要更换时重新输入。</p>
+          <div class="settings-row settings-actions"><button type="button" class="panel-mini" id="directorSaveKey" disabled>保存密钥</button><button type="button" class="panel-mini settings-secondary" id="directorClearKey" disabled>清除密钥</button></div>
+        </div>
+
+        <details class="background-details" data-subpanel="api" id="sceneDetails">
+          <summary><span>本次感知 · 先查看再发送</span></summary>
+          <p class="settings-help">不会因聊天中出现“看看”而读取屏幕。采集后仅内存保留 30 秒；此处不附带显式记忆。截图范围为主屏，可能包含其他应用的私人信息。</p>
+          <label class="settings-row settings-toggle"><span>本次读取前台窗口标题</span><input id="sceneTitle" type="checkbox" /></label>
+          <label class="settings-row settings-toggle"><span>本次采集主屏截图</span><input id="sceneScreenshot" type="checkbox" /></label>
+          <button class="panel-mini" id="sceneCollect" type="button">3 秒后采集并预览</button>
+          <p class="director-status" id="sceneStatus" role="status" aria-live="polite">未采集任何内容。</p>
+          <div id="scenePreview" hidden>
+            <pre id="sceneMeta" class="context-preview"></pre>
+            <img id="sceneImage" class="scene-preview-image" alt="仅本地预览的本次主屏截图" hidden />
+            <label class="director-field"><span>关于本次感知的问题</span><textarea id="sceneQuestion" rows="2" maxlength="2000" placeholder="只根据这次感知回答，不要猜测之前发生的事。"></textarea></label>
+            <label class="settings-row settings-toggle"><span>我已检查预览，同意发送到上方所示目的地</span><input id="sceneConsent" type="checkbox" /></label>
+            <button class="panel-mini" id="sceneSend" type="button" disabled>确认发送本次感知并表演</button>
+          </div>
+          <button class="panel-mini settings-secondary" id="sceneClear" type="button">清除预览 / 取消采集</button>
+        </details>
+        <details class="background-details" data-subpanel="api" id="shareDetails">
+          <summary><span>DSH 人设共享 · 默认关闭</span></summary>
+          <p class="settings-help">仅选中的风格字段可共享 10 分钟，重启后关闭。不共享记忆、密钥或截图，也不授予自主启动权限。任何持有本机控制凭据的程序均可读取，不是 DSH 进程隔离。</p>
+          <div id="shareFields">
+            <label class="settings-row settings-toggle"><span>角色身份</span><input type="checkbox" value="identity" checked /></label>
+            <label class="settings-row settings-toggle"><span>性格倾向</span><input type="checkbox" value="temperament" checked /></label>
+            <label class="settings-row settings-toggle"><span>说话风格</span><input type="checkbox" value="voice" checked /></label>
+            <label class="settings-row settings-toggle"><span>互动方式</span><input type="checkbox" value="interactionStyle" /></label>
+            <label class="settings-row settings-toggle"><span>补充风格说明</span><input type="checkbox" value="styleNotes" /></label>
+          </div>
+          <button class="panel-mini" id="sharePreviewButton" type="button">本地预览选中字段</button>
+          <pre id="sharePreviewText" class="context-preview" hidden></pre>
+          <button class="panel-mini" id="shareConfirm" type="button" hidden>确认限时共享选中内容</button>
+          <button class="panel-mini settings-secondary" id="shareRevoke" type="button">撤回共享</button>
+          <p class="director-status" id="shareStatus" role="status" aria-live="polite"></p>
+        </details>
+        <details class="background-details" data-subpanel="api" id="legacyDetails">
+          <summary><span>旧数据清理 · 仅此测试目录</span></summary>
+          <p class="settings-help">旧聊天、旧记忆、旧人设和旧模型凭据不会自动导入。人设迁移可在上方查看旧设定后手动保存。清理只删除此目录的指定旧字段，不删除当前加密人设和记忆，不清理备份或其他版本。</p>
+          <p class="director-status" id="legacyStatus" role="status" aria-live="polite"></p>
+          <button class="panel-mini" id="legacyRefresh" type="button">检查旧字段</button>
+          <button class="panel-mini" id="legacyPrepare" type="button" disabled>准备清理旧字段</button>
+          <div id="legacyConfirmation" hidden><p class="settings-help">确认删除下列旧字段？本操作不保留含旧内容的副本；两个文件分别提交，可能部分完成。</p><pre class="context-preview" id="legacyPreview"></pre><button class="panel-mini panel-danger" id="legacyConfirm" type="button">确认删除所列旧字段</button><button class="panel-mini" id="legacyCancel" type="button">取消</button></div>
+        </details>
+        <details class="background-details director-diagnostics" data-subpanel="api">
+          <summary><span>控制 API 高级诊断</span></summary>
+          <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>允许高级诊断 eval</span><small>默认关闭。开启后，本机控制 API 可执行 JavaScript；只在理解风险的诊断中使用。</small></span><input type="checkbox" id="directorAllowDiagnostics" disabled /></label>
+          <button type="button" class="panel-mini settings-secondary" id="directorSaveDiagnostics" disabled>保存诊断设置</button>
+        </details>
+        <div class="settings-group settings-divider" data-subpanel="tts">
+          <h3 class="settings-group-title">语音合成（TTS）</h3>
+          <p class="settings-help">把气泡台词交给本地 GPT-SoVITS 合成。服务地址留空即关闭语音。</p>
+          <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>启用语音</span><small>说话时用本地合成语音</small></span><input type="checkbox" id="ttsEnabled" /></label>
+          <label class="director-field" for="ttsUrl"><span>服务地址</span><input type="text" id="ttsUrl" placeholder="http://127.0.0.1:9880/tts" autocomplete="off" spellcheck="false" /></label>
+          <label class="director-field" for="ttsRefAudio"><span>参考音频路径</span><input type="text" id="ttsRefAudio" placeholder="D:/GPT-SoVITS/ref_audio/idle50.wav" autocomplete="off" spellcheck="false" /></label>
+          <div class="persona-field-grid">
+            <label class="director-field" for="ttsRefLang"><span>参考语言</span><select id="ttsRefLang"><option value="ja">日语</option><option value="zh">中文</option><option value="en">英语</option></select></label>
+            <label class="director-field" for="ttsSayLang"><span>说话语言</span><select id="ttsSayLang"><option value="ja">日语</option><option value="zh">中文</option></select></label>
+          </div>
+          <p class="director-status" id="ttsStatus" role="status" aria-live="polite"></p>
+          <div class="persona-actions"><button type="button" class="panel-mini settings-primary" id="ttsSave">保存语音设置</button></div>
+        </div>
+      </section>
+    </main>
+    <footer class="settings-footer">
+      <div class="settings-footer-row"><div class="appearance-status" id="appearanceStatus" role="status" aria-live="polite">正在读取当前设置…</div><button type="button" class="panel-mini settings-quit" id="btnQuit" aria-expanded="false" aria-controls="quitConfirmation">退出桌宠</button></div>
+      <div class="quit-confirmation" id="quitConfirmation" role="group" aria-label="确认退出桌宠" hidden><p>将关闭桌宠与设置窗口。</p><div class="quit-confirmation-actions"><button type="button" class="panel-mini" id="btnCancelQuit">取消</button><button type="button" class="panel-mini panel-danger" id="btnConfirmQuit">确认退出</button></div></div>
+    </footer>
+  </div>
+  <script src="appearance.js"></script>
+  <script src="settings.js"></script>
+  <script src="director-settings.js"></script>
+  <script src="persona-settings.js"></script>
+  <script src="memory-settings.js"></script>
+  <script src="memory-library-settings.js"></script>
+  <script src="autonomous-settings.js"></script>
+  <script src="context-settings.js"></script>
+  <script src="tts-settings.js"></script>
+</body>
+</html>
