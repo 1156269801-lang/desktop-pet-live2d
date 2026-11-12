@@ -275,11 +275,12 @@ function syncActingExpressions(names) {
  * 通道 → 参数。bound 取角色专门绑定的输入参数；fallback 是 Cubism 标准参数名
  * （物理输出不可写，会被自动跳过）。degrees 的通道按 ±30 的量程换算。
  * boundSign / fallbackSign 把"画面方向"换成该参数的正负：本角色实测
- * AngleX 正=脸朝画面左、AngleY 正=低头；Cubism 标准 ParamAngleY 正=抬头。
+ * AngleX 正=脸朝画面左、AngleY 正=抬头（截图实测，与 Cubism 标准 ParamAngleY 同向）。
+ * 表演层和生动层内部约定 headY 正=低头，所以俯仰通道统一取反。
  */
 const ACTING_CHANNELS = {
   headX: { bound: 'headX', fallback: ['ParamAngleX'], degrees: true, boundSign: -1 },
-  headY: { bound: 'headY', fallback: ['ParamAngleY'], degrees: true, fallbackSign: -1 },
+  headY: { bound: 'headY', fallback: ['ParamAngleY'], degrees: true, boundSign: -1, fallbackSign: -1 },
   headZ: { bound: 'headZ', fallback: ['ParamAngleZ'], degrees: true },
   bodyX: { bound: 'bodyX', fallback: ['ParamBodyAngleX'], degrees: true },
   bodyY: { known: ['PositionY'], fallback: ['ParamBodyAngleY'], degrees: true },
@@ -473,8 +474,8 @@ function applyDirectorPose(name) {
   const map = {
     tiltLeft: { AngleZ: 15 },
     tiltRight: { AngleZ: -15 },
-    lookUp: { AngleY: -12 },
-    lookDown: { AngleY: 12 },
+    lookUp: { AngleY: 12 },
+    lookDown: { AngleY: -12 },
     squint: { ParamEyeLOpen: 0.35, ParamEyeROpen: 0.35 },
     smile: { ParamMouthForm: 1 },
   }
