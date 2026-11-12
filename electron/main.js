@@ -74,8 +74,8 @@ function registerVtubeHotkeys(character) {
 
 const ROOT = path.resolve(__dirname, '..')
 const TEST_HEADLESS = process.env.DAFEIYU_TEST_HEADLESS === '1'
-const APP_VERSION = 'v0.6.8-preview.11'
-const APP_LABEL = '大肥鱼桌宠 · ' + APP_VERSION + ' 测试版'
+const APP_VERSION = 'v1.1.0'
+const APP_LABEL = '大肥鱼桌宠 · ' + APP_VERSION
 const LOG_PATH = path.join(ROOT, '_pet.log')
 
 /** Windows 上 electron.exe 是 GUI 子系统，stdout 常常看不到，所以同时落盘。 */

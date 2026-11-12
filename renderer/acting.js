@@ -8,7 +8,8 @@
  *         随后，身体最后。每次播放的幅度、时长、左右都略有不同。
  *   情绪  持续的底姿（开心、难过、得意……）加上有节奏的身体摆动，慢慢衰减
  *         回平静，同时改变微动和说话伴随的力度。
- *   表情  情绪和部分手势会点名模型自带的表情（屑屑眼、爱心眼、脸红……）。
+ *   表情  情绪和部分手势会点名模型自带的表情（爱心眼、脸红、屑屑眼……）。
+ *         屑屑眼是敷衍、无语的脸，只用在「无语」「敷衍」「冷汗」上。
  *         这里只给名字，由调用方在模型有这个表情时打开、结束时关掉。
  *
  * 调用方只说"做什么"（play('nod')、setMood('happy')），曲线都在这里。
@@ -146,15 +147,33 @@
     } },
     lookUp: { label: '抬头', duration: 1500, tracks: { headY: hold(-9, 0.25, 0.72), eyeY: hold(0.3, 0.15, 0.7), ...both(hold(0.25, 0.2, 0.7)) } },
     lookDown: { label: '低头', duration: 1500, tracks: { headY: hold(9, 0.25, 0.72), eyeY: hold(-0.3, 0.15, 0.7) } },
-    smirk: { label: '坏笑', duration: 2000, sided: true, expression: during(['屑屑眼'], 0.08, 0.84), tracks: {
+    smirk: { label: '坏笑', duration: 2000, sided: true, expression: during(['兔牙'], 0.08, 0.84), tracks: {
       headZ: hold(-6, 0.22, 0.8),
-      headY: hold(-4, 0.22, 0.8),
+      headY: hold(4, 0.22, 0.8),
       headX: hold(4, 0.22, 0.8),
-      lean: hold(-4, 0.28, 0.8),
-      eyeOpen: hold(-0.25, 0.15, 0.8),
-      mouthForm: hold(0.7, 0.15, 0.8),
-      browL: hold(0.4, 0.15, 0.8),
-      browR: hold(-0.2, 0.15, 0.8),
+      lean: hold(4, 0.28, 0.8),
+      eyeY: hold(0.25, 0.15, 0.8),
+      eyeOpen: hold(-0.35, 0.15, 0.8),
+      eyeSmile: hold(0.5, 0.15, 0.8),
+      mouthForm: hold(1, 0.15, 0.8),
+      browL: hold(0.5, 0.15, 0.8),
+      browR: hold(-0.35, 0.15, 0.8),
+    } },
+    meh: { label: '敷衍', duration: 2400, sided: true, expression: during(['屑屑眼'], 0.06, 0.86), tracks: {
+      headX: hold(6, 0.3, 0.8),
+      headZ: hold(4, 0.3, 0.8),
+      headY: [[0, 0], [0.3, 2], [0.45, 4], [0.55, 2], [0.66, 4], [0.8, 2], [1, 0]],
+      eyeX: hold(0.5, 0.15, 0.8),
+      lean: hold(-3, 0.3, 0.8),
+      mouthForm: hold(-0.3, 0.2, 0.8),
+      ...both(hold(-0.25, 0.2, 0.8)),
+    } },
+    sweat: { label: '无语地冒冷汗', duration: 2200, expression: during(['屑屑眼', '流冷汗'], 0.06, 0.86), tracks: {
+      lean: [[0, 0], [0.12, -6], [0.3, -4], [0.8, -4], [1, 0]],
+      headY: hold(-2, 0.2, 0.8),
+      bodyY: [[0, 0], [0.12, 1.5], [0.3, 0], [1, 0]],
+      mouthForm: hold(-0.4, 0.2, 0.8),
+      ...both(hold(-0.2, 0.2, 0.8)),
     } },
     swoon: { label: '心动', duration: 2200, expression: during(['爱心眼', '脸红'], 0.05, 0.88), tracks: {
       lean: hold(5, 0.2, 0.8),
@@ -218,9 +237,12 @@
     surprised: { label: '惊讶', energy: 1.2, halfLife: 5,
       pose: { browL: 0.7, browR: 0.7, eyeOpen: 0.35, headY: -3, lean: -5, shock: 0.6 } },
     smug: { label: '得意', energy: 0.9, halfLife: 20,
-      pose: { headY: -5, headZ: -4, browL: 0.3, browR: -0.15, mouthForm: 0.6, eyeOpen: -0.2, lean: -5 },
+      pose: { headY: -5, headZ: -4, browL: 0.4, browR: -0.2, mouthForm: 0.9, eyeOpen: -0.3, eyeSmile: 0.3, lean: -5 },
       sway: { x: 3, z: 2.5, y: 0, hz: 0.3 },
-      expression: { eyes: '屑屑眼', above: 0.4 } },
+      expression: { extra: ['兔牙'], above: 0.4 } },
+    deadpan: { label: '无语', energy: 0.5, halfLife: 18,
+      pose: { headY: 2, headZ: 3, eyeX: 0.25, browL: -0.25, browR: -0.25, mouthForm: -0.3, lean: -2 },
+      expression: { eyes: '屑屑眼', above: 0.35 } },
     sleepy: { label: '犯困', energy: 0.45, halfLife: 40,
       pose: { headY: 6, eyeOpen: -0.45, browL: -0.2, browR: -0.2, lean: 3 },
       sway: { x: 2.5, z: 3, y: 0, hz: 0.12 } },

@@ -204,7 +204,8 @@ test('情绪联动模型表情，强度不够或消退后关掉', () => {
     stage.setMood(name, intensity)
     return stage.step(1 / 60).expressions
   }
-  assert.deepEqual(expr('smug', 1), ['屑屑眼'])
+  assert.deepEqual(expr('smug', 1), ['兔牙'])
+  assert.deepEqual(expr('deadpan', 1), ['屑屑眼'])
   assert.deepEqual(expr('love', 1), ['爱心眼', '脸红'])
   assert.deepEqual(expr('shy', 1), ['脸红'])
   assert.deepEqual(expr('sad', 1), ['流泪'])
@@ -216,7 +217,7 @@ test('情绪联动模型表情，强度不够或消退后关掉', () => {
   assert.deepEqual(expr('sad', 0.5), [])
   // 消退后自动关掉
   const stage = Acting.create({ random: seeded(25) })
-  stage.setMood('smug', 1)
+  stage.setMood('deadpan', 1)
   run(stage, 120)
   assert.deepEqual(stage.step(1 / 60).expressions, [])
   // 换情绪立刻换脸
@@ -227,14 +228,26 @@ test('情绪联动模型表情，强度不够或消退后关掉', () => {
 
 test('手势期间打开对应表情，结束后关掉；眼型表情同一时刻只有一个', () => {
   const stage = Acting.create({ random: seeded(26) })
-  stage.play('smirk', { side: 'right' })
+  stage.play('meh', { side: 'right' })
   const frames = run(stage, 3)
   assert.deepEqual(frames[0].expressions, [], '起手时还没开')
   assert.deepEqual(frames[60].expressions, ['屑屑眼'])
   assert.deepEqual(frames[frames.length - 1].expressions, [])
-  // 得意（屑屑眼）时心动：手势的爱心眼优先，屑屑眼让位，脸红照常
+  // 屑屑眼只属于无语、敷衍、冷汗；得意和坏笑不用它
+  for (const [id, gesture] of Object.entries(Acting.GESTURES)) {
+    const uses = Boolean(gesture.expression && gesture.expression.names.includes('屑屑眼'))
+    assert.equal(uses, ['meh', 'sweat'].includes(id), id)
+  }
+  for (const [id, mood] of Object.entries(Acting.MOODS)) assert.equal(mood.expression?.eyes === '屑屑眼', id === 'deadpan', id)
+  const cheeky = Acting.create({ random: seeded(29) })
+  cheeky.play('smirk')
+  assert.deepEqual(run(cheeky, 1).pop().expressions, ['兔牙'])
+  const sweaty = Acting.create({ random: seeded(30) })
+  sweaty.play('sweat')
+  assert.deepEqual(run(sweaty, 1).pop().expressions, ['屑屑眼', '流冷汗'])
+  // 无语（屑屑眼）时心动：手势的爱心眼优先，屑屑眼让位，脸红照常
   const both = Acting.create({ random: seeded(27) })
-  both.setMood('smug', 1)
+  both.setMood('deadpan', 1)
   both.play('swoon')
   const mid = run(both, 1).pop().expressions
   assert.deepEqual(mid, ['爱心眼', '脸红'])

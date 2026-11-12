@@ -27,13 +27,13 @@
     '想': 'think', '思考': 'think',
     '瞥': 'glance', '移开视线': 'away', '盯': 'peer',
     '抬头': 'lookUp', '低头': 'lookDown',
-    '坏笑': 'smirk', '心动': 'swoon', '摇摆': 'sway', '跺脚': 'stomp', '凑近': 'leanIn',
+    '坏笑': 'smirk', '敷衍': 'meh', '冷汗': 'sweat', '心动': 'swoon', '摇摆': 'sway', '跺脚': 'stomp', '凑近': 'leanIn',
   }
 
   /** 中文标记 → 情绪 id */
   const MOOD = {
     '开心': 'happy', '喜欢': 'love', '害羞': 'shy', '难过': 'sad', '生气': 'angry',
-    '得意': 'smug', '困': 'sleepy', '犯困': 'sleepy', '困惑': 'confused',
+    '得意': 'smug', '无语': 'deadpan', '困': 'sleepy', '犯困': 'sleepy', '困惑': 'confused',
     '紧张': 'nervous', '平静': 'neutral',
   }
 

@@ -1,11 +1,12 @@
 {
   "name": "dsh-desktop-pet",
-  "version": "0.6.8-preview.11",
+  "version": "1.1.0",
   "private": false,
-  "description": "大肥鱼桌面宠物：拆窗 UI、导演系统、多表情、点击穿透、可选本地 TTS",
+  "description": "大肥鱼桌面宠物：口型同步、表演层与情绪、台词行内标记、直播搭子、可选本地 TTS",
   "main": "electron/main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "test": "node engine/test/choreo.test.js && node engine/test/lip-sync.test.js && node engine/test/liveliness.test.js && node engine/test/acting.test.js && node engine/test/streamer.test.js && node engine/test/provider.test.js"
   },
   "dependencies": {
     "ws": "^8.18.0"
