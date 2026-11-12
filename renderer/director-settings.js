@@ -12,11 +12,13 @@
     key: byId('directorApiKey'), text: byId('directorText'), refresh: byId('directorRefresh'),
     save: byId('directorSaveConfig'), saveDiagnostics: byId('directorSaveDiagnostics'),
     saveKey: byId('directorSaveKey'), clearKey: byId('directorClearKey'),
+    connect: byId('directorConnect'), test: byId('directorTest'),
     local: byId('directorPreviewLocal'), remote: byId('directorPreviewRemote'), cancel: byId('directorCancel'),
   }
   const configControls = ['enabled', 'baseURL', 'model', 'allowRemote', 'allowDiagnostics', 'tokenizerProfile', 'contextTokens'].map(key => controls[key])
   const supported = ['directorState', 'directorSave', 'directorClearKey', 'directorPreview', 'directorCancel']
     .every(name => typeof api?.[name] === 'function')
+  const connectSupported = supported && typeof api?.directorConnect === 'function' && typeof api?.directorTest === 'function'
   let state = null
   let loading = false, saving = false, previewing = false, stopping = false, disposed = false
   let stateRevision = 0, editRevision = 0, previewRevision = 0, refreshTimer = 0
@@ -26,6 +28,42 @@
     const target = byId(preview ? 'directorPreviewStatus' : 'directorStatus')
     target.textContent = text
     target.dataset.error = String(error)
+    // 保存类提示原本只显示在「自主」子页里，在 API 页看不到：这里同步一份
+    if (!preview) connectMessage(text, error)
+  }
+
+  function connectMessage(text, error = false) {
+    const target = byId('directorConnectStatus')
+    target.textContent = text
+    target.dataset.error = String(error)
+  }
+
+  const TEST_MESSAGES = {
+    ok: '已连接，可以聊天了。',
+    auth: '密钥被拒绝（401/403）。请检查密钥是否完整、是否属于这个服务商。',
+    balance: '服务商提示余额不足（402）。',
+    'not-found': '服务地址或模型名称不存在（404）。',
+    'bad-request': '请求被拒绝（400/422），多半是模型名称不对。',
+    rate: '请求太频繁或额度已用尽（429），稍后再试。',
+    server: '服务商暂时出错（5xx），稍后再试。',
+    status: '服务商返回了未预期的状态。',
+    network: '连不上这个地址。请检查网络、代理和服务地址。',
+    timeout: '连接超时。请检查网络和服务地址。',
+    format: '连上了，但返回的不是标准的 chat/completions 格式。请确认服务地址写到了正确的层级。',
+    'no-key': '还没有密钥。换了服务地址后旧密钥会被清除，请重新输入。',
+    address: '服务地址无效：需要 https 地址（本机可用 http://127.0.0.1）。',
+    model: '请填写模型名称。',
+    disabled: '还没有保存并连接。',
+    vault: '读取本机密钥失败，请确认系统加密可用后重新输入密钥。',
+  }
+
+  function showTest(test) {
+    const code = typeof test?.code === 'string' && Object.hasOwn(TEST_MESSAGES, test.code) ? test.code : 'status'
+    const models = (Array.isArray(test?.models) ? test.models : []).filter(id => typeof id === 'string').slice(0, 40)
+    const list = byId('directorModelList')
+    list.replaceChildren(...models.map(id => { const option = document.createElement('option'); option.value = id; return option }))
+    const hint = models.length ? ' 这个地址可用的模型：' + models.slice(0, 8).join('、') + (models.length > 8 ? ' 等' : '') + '。' : ''
+    connectMessage((test?.ok === true ? '' : '已保存，但没连上：') + TEST_MESSAGES[code] + hint, test?.ok !== true)
   }
 
   function draft() {
@@ -90,6 +128,12 @@
     controls.save.disabled = controls.saveDiagnostics.disabled = !ready || busy
     controls.saveKey.disabled = !ready || busy || !state.encryptionAvailable || !controls.key.value.trim()
     controls.clearKey.disabled = !ready || busy || !(state.hasKey || controls.key.value)
+    const typedKey = Boolean(controls.key.value.trim())
+    controls.connect.disabled = !ready || !connectSupported || busy || !controls.baseURL.value.trim() || !controls.model.value.trim()
+      || !(typedKey || state.hasKey) || (typedKey && !state.encryptionAvailable)
+    controls.test.disabled = !ready || !connectSupported || busy || Boolean(isDirty()) || typedKey
+      || !(state.config.enabled && state.config.allowRemote && state.hasKey)
+    controls.connect.textContent = saving && controls.connect.dataset.pending === 'true' ? '正在连接…' : '保存并连接'
     controls.local.disabled = !ready || busy || state.running || !controls.text.value.trim()
     controls.remote.disabled = !ready || busy || state.running || !remoteReady()
     controls.cancel.disabled = !ready || stopping || saving || (!previewing && !state.running)
@@ -205,6 +249,34 @@
     }
   }
 
+  async function connect(testOnly) {
+    if (!connectSupported || !state || saving || previewing || stopping) return
+    const payload = { baseURL: controls.baseURL.value.trim(), model: controls.model.value.trim() }
+    if (!testOnly && !validConfig({ ...payload, enabled: true })) return
+    const typed = controls.key.value.trim()
+    if (!testOnly && typed) payload.apiKey = typed
+    if (!testOnly) controls.key.value = ''
+    ++stateRevision
+    loading = false
+    saving = true
+    controls.connect.dataset.pending = String(!testOnly)
+    render()
+    connectMessage(testOnly ? '正在测试连接…' : '正在保存并测试连接…')
+    try {
+      const result = testOnly ? await api.directorTest() : await api.directorConnect(payload)
+      if (disposed) return
+      if (!result?.ok) { connectMessage(typeof result?.error === 'string' ? result.error : '保存未完成，请检查后重试。', true); return }
+      acceptState(result, !testOnly)
+      if (!testOnly) window.dispatchEvent(new CustomEvent('director:config-updated'))
+      showTest(result.test)
+    } catch (_) {
+      if (!disposed) connectMessage(testOnly ? '测试未完成，请重试。' : '保存未完成，密钥输入已清空，请重新输入后重试。', true)
+    } finally {
+      payload.apiKey = ''
+      if (!disposed) { saving = false; controls.connect.dataset.pending = 'false'; render(); scheduleRefresh() }
+    }
+  }
+
   async function preview(remote) {
     if (!supported || !state || saving || previewing || stopping || state.running) return
     const text = controls.text.value.trim()
@@ -260,7 +332,7 @@
     // A retained checkbox is not fresh consent to a changed recipient/model.
     if (control === controls.baseURL || control === controls.model) {
       controls.allowRemote.checked = false
-      message('服务地址或模型已编辑；请确认目的地后重新勾选并保存。跨服务地址保存会清除旧密钥，需在专用框重新输入。')
+      message('服务地址或模型已修改，点「保存并连接」生效。换了服务地址需要重新输入密钥。')
     }
     ++editRevision; render()
   })
@@ -271,6 +343,8 @@
   controls.saveDiagnostics.addEventListener('click', () => { void save('diagnostics') })
   controls.saveKey.addEventListener('click', () => { void save('key') })
   controls.clearKey.addEventListener('click', () => { void save('clear') })
+  controls.connect.addEventListener('click', () => { void connect(false) })
+  controls.test.addEventListener('click', () => { void connect(true) })
   controls.local.addEventListener('click', () => { void preview(false) })
   controls.remote.addEventListener('click', () => { void preview(true) })
   controls.cancel.addEventListener('click', () => { void cancel() })

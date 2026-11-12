@@ -41,6 +41,94 @@ function rejectCredentialReflection(value, key) {
     }
   }
 }
+// 失败原因只归类成固定的几种，不回显服务商的响应内容。
+const PROVIDER_MESSAGES = Object.freeze({
+  auth: '模型服务拒绝了密钥（401/403）。请检查密钥是否完整、是否属于这个服务商。',
+  balance: '模型服务提示余额不足（402）。',
+  'not-found': '服务地址或模型名称不存在（404）。',
+  'bad-request': '模型服务拒绝了请求（400/422），多半是模型名称不对。',
+  rate: '请求太频繁或额度已用尽（429），请稍后再试。',
+  server: '模型服务暂时出错（5xx），请稍后再试。',
+  status: '模型服务返回了未预期的状态。',
+  network: '连不上模型服务。请检查网络、代理和服务地址。',
+  timeout: '模型请求已取消或超时。',
+  format: '模型返回的内容不是约定的 JSON 格式。可以再试一次，或换一个模型。',
+})
+function classifyStatus(status) {
+  if (status === 401 || status === 403) return 'auth'
+  if (status === 402) return 'balance'
+  if (status === 404) return 'not-found'
+  if (status === 400 || status === 422) return 'bad-request'
+  if (status === 429) return 'rate'
+  if (status >= 500) return 'server'
+  return 'status'
+}
+function providerError(code) {
+  const known = Object.hasOwn(PROVIDER_MESSAGES, code) ? code : 'status'
+  return Object.assign(new Error(PROVIDER_MESSAGES[known]), { providerCode: known })
+}
+/** 模型有时会在 JSON 前后加说明文字：退一步取第一个 { 到最后一个 } */
+function parseLoose(text) {
+  try { return JSON.parse(text) } catch {
+    const start = text.indexOf('{'), end = text.lastIndexOf('}')
+    if (start < 0 || end <= start) throw new Error('format')
+    return JSON.parse(text.slice(start, end + 1))
+  }
+}
+async function readLimited(response, max) {
+  const reader = response.body.getReader(), chunks = []
+  let size = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.length
+    if (size > max) { await reader.cancel(); throw new Error('size') }
+    chunks.push(Buffer.from(value))
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
+/** 读服务商的模型列表（OpenAI 兼容的 GET /models）。只留形如模型名的短字符串。 */
+async function listModels({ baseURL, key, signal, fetchImpl }) {
+  try {
+    const url = endpoint(baseURL).replace(/\/chat\/completions$/, '/models')
+    const r = await fetchImpl(url, { method: 'GET', redirect: 'error', signal, headers: { authorization: 'Bearer ' + key } })
+    if (!r.ok) { await r.body?.cancel(); return [] }
+    const data = JSON.parse(await readLimited(r, 262144))
+    return [...new Set((Array.isArray(data?.data) ? data.data : []).map(item => item?.id)
+      .filter(id => typeof id === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(id) && !id.includes(key)))].slice(0, 40)
+  } catch { return [] }
+}
+/**
+ * 发一条极短的请求，确认地址、模型、密钥三者能用。
+ * 返回 { ok, code, models? }；code 是固定分类，models 只在地址通但模型不对时给出。
+ */
+async function testConnection({ config, key, fetchImpl = fetch, timeoutMs = 15000 }) {
+  if (typeof key !== 'string' || !key) return { ok: false, code: 'no-key' }
+  let url
+  try { url = endpoint(config?.baseURL) } catch { return { ok: false, code: 'address' } }
+  if (typeof config.model !== 'string' || !config.model.trim() || config.model.length > 128) return { ok: false, code: 'model' }
+  const abort = new AbortController()
+  const timer = setTimeout(() => abort.abort(), timeoutMs)
+  try {
+    let r
+    try {
+      r = await fetchImpl(url, { method: 'POST', redirect: 'error', signal: abort.signal,
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
+        body: JSON.stringify({ model: config.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 8 }) })
+    } catch { return { ok: false, code: abort.signal.aborted ? 'timeout' : 'network' } }
+    if (!r.ok) {
+      await r.body?.cancel()
+      const code = classifyStatus(r.status)
+      const models = ['not-found', 'bad-request'].includes(code)
+        ? await listModels({ baseURL: config.baseURL, key, signal: abort.signal, fetchImpl }) : []
+      return { ok: false, code, ...(models.length ? { models } : {}) }
+    }
+    try {
+      const data = JSON.parse(await readLimited(r, 65536))
+      return Array.isArray(data?.choices) ? { ok: true, code: 'ok' } : { ok: false, code: 'format' }
+    } catch { return { ok: false, code: abort.signal.aborted ? 'timeout' : 'format' } }
+  } finally { clearTimeout(timer) }
+}
 async function requestPlan({ config, key, prompt, text, imageDataUrl, signal, fetchImpl = fetch }) {
   if (config.enabled !== true || config.allowRemote !== true || typeof key !== 'string' || !key) throw new Error('尚未启用并授权模型服务')
   const url = endpoint(config.baseURL)
@@ -61,11 +149,12 @@ async function requestPlan({ config, key, prompt, text, imageDataUrl, signal, fe
   const timer = setTimeout(cancel, 30000)
   try {
     if (abort.signal.aborted) throw new Error('cancelled')
-    const r = await fetchImpl(url, { method: 'POST', redirect: 'error', signal: abort.signal,
+    let r
+    try { r = await fetchImpl(url, { method: 'POST', redirect: 'error', signal: abort.signal,
       headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
-      body: JSON.stringify({ ...payload, messages }) })
+      body: JSON.stringify({ ...payload, messages }) }) } catch { throw providerError(abort.signal.aborted ? 'timeout' : 'network') }
     if (abort.signal.aborted) { await r.body?.cancel(); throw new Error('cancelled') }
-    if (!r.ok) { await r.body?.cancel(); throw new Error('provider status') }
+    if (!r.ok) { await r.body?.cancel(); throw providerError(classifyStatus(r.status)) }
     const reader = r.body.getReader(), chunks = []
     let size = 0
     for (;;) { const { done, value } = await reader.read(); if (done) break; size += value.length; if (size > 262144) { await reader.cancel(); throw new Error('size') } chunks.push(Buffer.from(value)) }
@@ -74,12 +163,12 @@ async function requestPlan({ config, key, prompt, text, imageDataUrl, signal, fe
     if (typeof content !== 'string' || content.length > 50000) throw new Error('format')
     const clean = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
     if (abort.signal.aborted) throw new Error('cancelled')
-    const parsed = JSON.parse(clean)
+    const parsed = parseLoose(clean)
     rejectCredentialReflection(parsed, key)
     return parsed
-  } catch {
-    // Never echo provider responses, URLs, headers, causes or prompt content.
-    throw new Error(abort.signal.aborted ? '模型请求已取消或超时' : '模型请求失败或返回格式无效，请检查服务地址、模型与授权')
+  } catch (error) {
+    // Never echo provider responses, URLs, headers, causes or prompt content: only a fixed category.
+    throw providerError(abort.signal.aborted ? 'timeout' : error?.providerCode || 'format')
   } finally { clearTimeout(timer); signal?.removeEventListener('abort', cancel) }
 }
-module.exports = { endpoint, requestPlan, validateImageDataUrl, IMAGE_MAX_BYTES, TEXT_REQUEST_MAX_BYTES }
+module.exports = { endpoint, requestPlan, testConnection, classifyStatus, PROVIDER_MESSAGES, validateImageDataUrl, IMAGE_MAX_BYTES, TEXT_REQUEST_MAX_BYTES }

@@ -2,7 +2,7 @@
 const path = require('node:path')
 const crypto = require('node:crypto')
 const { createVault } = require('./secret-vault')
-const { endpoint, requestPlan } = require('./director-provider')
+const { endpoint, requestPlan, testConnection } = require('./director-provider')
 const contract = require('../renderer/director-contract')
 const { createAutonomous } = require('./autonomous-director')
 const { createPersonaService } = require('./persona-service')
@@ -106,7 +106,7 @@ function createDirector({ root, config, saveConfig, getCapabilities, getDisplays
     let plan, memorySnapshot = null
     try {
       if (body.remote) {
-        if (config.director.enabled !== true || config.director.allowRemote !== true) return { ok: false, status: 403, error: '尚未授权远程模型请求' }
+        if (config.director.enabled !== true || config.director.allowRemote !== true) return { ok: false, status: 403, error: '还没有连接模型：请到 设置 → 导演 / API → API，填好后点「保存并连接」' }
         if (sceneReceipt && !scene.valid(sceneReceipt)) return { ok: false, status: 409, error: '本次感知已失效，请重新采集' }
         if (allowMemory === true) memorySnapshot = memory.retrieve(body.text)
         if (token !== generation) return { ok: false, status: 409, error: '记忆已变化，请重新发送当前问题' }
@@ -139,6 +139,7 @@ function createDirector({ root, config, saveConfig, getCapabilities, getDisplays
         TOKENIZER_UNAVAILABLE: '离线分词器校验或加载失败，未发送；请使用完整且校验通过的测试包。',
         BUDGET_INVALID: '上下文预算配置无效，未发送。' }
       if (Object.hasOwn(budgetErrors, error?.code)) return { ok: false, status: 422, code: error.code, error: budgetErrors[error.code] }
+      if (typeof error?.providerCode === 'string') return { ok: false, status: 502, code: error.providerCode, error: error.message }
       return { ok: false, status: 502, error: '导演请求失败：请检查模型配置、授权或加密存储；服务响应内容未记录' }
     }
     finally { if (token === generation) pending = null }
@@ -193,7 +194,26 @@ function createDirector({ root, config, saveConfig, getCapabilities, getDisplays
       return persistDirector(next, changeCredential)
     } catch { return { ok: false, error: '配置未完成：请检查地址格式或 Windows 加密存储；不会降级明文保存' } }
   }
+  // 测试连接只在已启用并授权时发出请求；结果是固定分类，不含服务商响应内容。
+  async function test() {
+    if (config.director.enabled !== true || config.director.allowRemote !== true) return { ok: false, code: 'disabled' }
+    let key = null
+    try { key = vault.get('provider') } catch { return { ok: false, code: 'vault' } }
+    return testConnection({ config: config.director, key })
+  }
+  // 一步接入：点「保存并连接」即同意把人设与对话发给这个地址。
+  // 一次完成启用、授权、保存密钥，然后立刻测试。换了服务地址而没给新密钥时，旧密钥照常被清除。
+  async function connect(body) {
+    if (!body || Object.keys(body).some(k => !['baseURL', 'model', 'apiKey'].includes(k))
+      || typeof body.baseURL !== 'string' || typeof body.model !== 'string') return { ok: false, error: '配置格式无效' }
+    if (!body.baseURL.trim() || !body.model.trim()) return { ok: false, error: '请填写服务地址和模型名称' }
+    const saved = save({ enabled: true, allowRemote: true, baseURL: body.baseURL, model: body.model,
+      ...(body.apiKey !== undefined ? { apiKey: body.apiKey } : {}) })
+    if (!saved.ok) return saved
+    return { ...state(), test: await test() }
+  }
   const handlers = {
+    connect, test: async () => ({ ...state(), test: await test() }),
     state: () => state(), save: save,
     'clear-key': () => persistDirector(disabledConfig(config.director), () => vault.remove('provider')),
     preview: body => preview(body, { allowMemory: true }), cancel,

@@ -26,6 +26,8 @@ const { readVtubeHotkeys } = require('./vtube-hotkeys')
 const { toContentCursor } = require('./cursor-coordinates')
 const { normalizeWindowGeometry } = require('./window-geometry')
 const { validateSet } = require('../renderer/parameter-policy')
+const { sanitizeEnvelope } = require('../renderer/lip-sync')
+const { stripMarkup } = require('../renderer/director-markup')
 const { importBackground, readBackgroundAsset } = require('./background-assets')
 const { protectString, createVault } = require('./secret-vault')
 const { createDirector } = require('./director-service')
@@ -328,6 +330,8 @@ const DEFAULT_CONFIG = {
     refLang: 'ja',
     // 说话语言：ja=日语朗读（speech_ja），zh=中文朗读（speech）
     sayLanguage: 'ja',
+    // 口型同步：说话时按语音音量驱动张嘴
+    lipSync: true,
   },
   debug: { captureAfterMs: 0 },
 }
@@ -627,9 +631,12 @@ async function replyAsPet(userText, scene, { allowMemory = false } = {}) {
     director.cancel()
     return { say: '已停止自主运行。', emotion: 'none', motion: 'none' }
   }
+  // 模型回复要几秒：先让她做一个"在想"的即时反应，台词到了再接上
+  pushToPet({ type: 'acting', gesture: 'think' })
   const result = await director.preview({ text: userText, remote: true }, { allowMemory })
   if (!result.ok) throw new Error(result.error || '导演请求失败')
-  return { say: result.plan.speech || '……', say_ja: result.plan.speech_ja || '', emotion: 'none', motion: 'none' }
+  // 台词里的〔表演标记〕只给主窗用；聊天窗和 QQ 拿到的是纯文字
+  return { say: stripMarkup(result.plan.speech) || '……', say_ja: result.plan.speech_ja || '', emotion: 'none', motion: 'none' }
 }
 
 /**
@@ -1012,6 +1019,18 @@ async function ttsSynthesize(text, lang) {
   const buf = Buffer.from(await response.arrayBuffer())
   return buf.toString('base64')
 }
+
+// 聊天窗播放的语音：口型包络转发给主窗（模型在那边）。只接受聊天窗，内容先收紧再转发。
+ipcMain.on('pet:lip-sync', (event, payload) => {
+  try {
+    if (!chatWindow || chatWindow.isDestroyed() || event.sender !== chatWindow.webContents) return
+    // 口型开关由主窗判断：包络同时用于说话伴随动作，关掉口型也要转发
+    const envelope = payload && !payload.stop ? sanitizeEnvelope(payload.envelope) : null
+    pushToPet(envelope ? { type: 'lip-sync', envelope } : { type: 'lip-sync', stop: true })
+  } catch {
+    /* 口型失败不影响语音 */
+  }
+})
 
 ipcMain.handle('pet:tts', async (_event, text, lang) => {
   try {

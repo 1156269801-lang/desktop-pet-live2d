@@ -189,6 +189,16 @@ async function refreshCharacters() {
     return
   }
   characterGrid.innerHTML = ''
+  // 标题栏：当前角色的头像与名字
+  const activeItem = (result.items || []).find((item) => item.id === result.active)
+  const avatar = document.getElementById('settingsAvatar')
+  const avatarImage = document.getElementById('settingsAvatarImage')
+  const characterName = document.getElementById('settingsCharacterName')
+  if (avatar && avatarImage) {
+    avatar.hidden = !(activeItem && activeItem.preview)
+    if (activeItem && activeItem.preview) avatarImage.src = activeItem.preview
+  }
+  if (characterName) characterName.textContent = activeItem ? activeItem.name || activeItem.id : ''
   if (!(result.items || []).length) {
     const empty = document.createElement('p')
     empty.className = 'character-empty'
@@ -356,6 +366,31 @@ bindRange(gazeRange, gazeValue, 'gazeStrength', (v) => Math.round(v) + '%')
 bindRange(document.getElementById('gazeBodyRange'), document.getElementById('gazeBodyValue'), 'gazeBody', (v) => Math.round(v) + '%')
 bindRange(document.getElementById('gazeSpeedRange'), document.getElementById('gazeSpeedValue'), 'gazeSpeed', (v) => Math.round(v) + '%')
 bindRange(breathRange, breathValue, 'breathFactor', (v) => Math.round(v) + '%')
+const livelinessRange = document.getElementById('livelinessRange')
+const livelinessValue = document.getElementById('livelinessValue')
+bindRange(livelinessRange, livelinessValue, 'liveliness', (v) => (v ? Math.round(v) + '%' : '关闭'))
+
+const actingScaleRange = document.getElementById('actingScaleRange')
+const actingScaleValue = document.getElementById('actingScaleValue')
+bindRange(actingScaleRange, actingScaleValue, 'actingScale', (v) => (v ? Math.round(v) + '%' : '关闭'))
+
+// 表演试演：手势与情绪的列表直接取自 acting.js，和模型能用的是同一份
+function fillPerformChips(id, items, cmd) {
+  const box = document.getElementById(id)
+  if (!box) return
+  for (const item of items) {
+    const chip = document.createElement('button')
+    chip.type = 'button'
+    chip.className = 'perform-chip'
+    chip.textContent = item.label
+    chip.addEventListener('click', () => send(cmd, item.id))
+    box.appendChild(chip)
+  }
+}
+if (window.PetActing) {
+  fillPerformChips('performChips', window.PetActing.gestures(), 'perform')
+  fillPerformChips('moodChips', window.PetActing.moods(), 'mood')
+}
 bindRange(snapRange, snapValue, 'snapDistance', (v) => (v ? Math.round(v) + 'px' : '关闭'))
 
 if (winWidthRange) {
@@ -455,6 +490,16 @@ if (api && typeof api.onState === 'function') {
     if (typeof s.gazeStrength === 'number' && gazeRange) {
       gazeRange.value = String(Math.round(s.gazeStrength * 100))
       if (gazeValue) gazeValue.textContent = Math.round(s.gazeStrength * 100) + '%'
+    }
+    if (typeof s.actingScale === 'number' && actingScaleRange) {
+      const percent = Math.round(s.actingScale * 100)
+      actingScaleRange.value = String(percent)
+      if (actingScaleValue) actingScaleValue.textContent = percent ? percent + '%' : '关闭'
+    }
+    if (typeof s.liveliness === 'number' && livelinessRange) {
+      const percent = Math.round(s.liveliness * 100)
+      livelinessRange.value = String(percent)
+      if (livelinessValue) livelinessValue.textContent = percent ? percent + '%' : '关闭'
     }
     if (typeof s.breathFactor === 'number' && breathRange) {
       breathRange.value = String(Math.round(s.breathFactor * 100))

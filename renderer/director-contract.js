@@ -250,6 +250,9 @@
     return { ok: true, status: 200, plan: clean }
   }
 
+  // 与 director-markup.js / acting.js 保持一致（engine/test/acting.test.js 会核对）
+  const PERFORM_MARKS = '〔点头〕〔连点头〕〔摇头〕〔歪头:左〕〔歪头:右〕〔一惊〕〔蹦〕〔笑〕〔哼〕〔失落〕〔想〕〔瞥:左〕〔瞥:右〕〔移开视线〕〔盯〕〔抬头〕〔低头〕〔坏笑〕〔心动〕〔摇摆〕〔跺脚〕〔凑近〕'
+  const MOOD_MARKS = '〔开心〕〔喜欢〕〔害羞〕〔难过〕〔生气〕〔得意〕〔犯困〕〔困惑〕〔紧张〕〔平静〕'
   function buildPrompt(capabilities) {
     const c = record(capabilities) ? capabilities : {}
     const manifest = {
@@ -266,7 +269,11 @@
       'speech 是中文台词（气泡显示）；speech_ja 是同一句的日语朗读版（TTS 用），两句意思一致；没有 speech 时不写 speech_ja。',
       'cues 最多24项，总时间不超过30000毫秒。at 是开始时间，duration 是正数毫秒；全部字段严格按协议，不添加解释或其他字段。',
       '每项共用 at、kind、duration。gesture 增加 name（能力id）、intensity（0到1）；expression 增加 name（情绪id或实际表情名）；outfit 增加 name（显式服装集合id）；parameters 增加 set（实际可写参数和值）；gaze 增加 space、x、y，display空间再加displayId。',
-      '先理解对话语气，再选0到3个短而克制的动作。安慰/难过不要搭配兴奋挥手，拒绝可轻摇头，认可可轻点头，问候或告别才适合挥手。没有合适能力就只说话，不编造动作。',
+      '表演主要写在 speech 里：在要做动作的那个字前面插入〔标记〕。标记不会显示也不会朗读，动作会落在那个字上。只能用下面列出的标记，不要自创。',
+      '手势标记：' + PERFORM_MARKS + '。手势后可加力度（0到1），如〔点头:0.6〕。',
+      '情绪标记（持续到被替换或自然消退）：' + MOOD_MARKS + '。',
+      '像主播一样表演：每句话开头先定情绪；每一两个分句配一个贴合语气的手势，落在重音或转折的字上；反应要鲜明，但同一手势不连续重复，也不要每个字都动。安慰或难过时不用〔蹦〕〔笑〕〔摇摆〕。情绪会带出对应的脸：〔得意〕是屑屑眼，〔喜欢〕是爱心眼，〔害羞〕会脸红，〔难过〕到深处会流泪。speech_ja 不写标记。',
+      'cues 里的 gesture 只在需要精确毫秒时间时才用，平时留空数组即可；没有合适的表演就只说话，不编造动作。',
       'wave 是真实左臂与手腕轨道，不等同于旧动作文件“打招呼”。不要把仅有头部运动的动作称为挥手。',
       '不要自动换衣、改变体型、饰品或尾巴。只有用户明确要求该外观变化时才能使用相应 outfit、外观表情或参数；不根据情绪推断换装授权。',
       'parameters 只使用能力表列出的可写参数，严格范围、必须限时；不能写物理输出。非物理输出不等于每个参数都有可见效果，不将分隔参数当动作。',
@@ -356,5 +363,5 @@
     return { ...result, source: 'deterministic-local-rules', deterministic: true, llm: false }
   }
 
-  return Object.freeze({ version: VERSION, buildCapabilities, validatePlan, buildPrompt, planDialogue })
+  return Object.freeze({ version: VERSION, buildCapabilities, validatePlan, buildPrompt, planDialogue, PERFORM_MARKS, MOOD_MARKS })
 })

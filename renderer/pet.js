@@ -146,12 +146,252 @@ let ttsSayLanguage = 'ja'
 /** 当前正在播放的语音（新语音先停旧的，避免叠音） */
 let currentSpeechAudio = null
 
+/**
+ * 口型同步状态。两种来源：
+ *   audio  主窗自己播放的语音，按 audio.currentTime 查包络
+ *   remote 聊天窗播放的语音，包络经主进程转发过来，按本地时钟查
+ */
+const lipSync = {
+  enabled: true,
+  audio: null,
+  envelope: null,
+  remoteStartAt: 0,
+  smoother: window.PetLipSync ? window.PetLipSync.createMouthSmoother() : null,
+  lastAt: 0,
+}
+/** 嘴型略微提前于声音：平滑本身有几十毫秒滞后，且嘴先动比后动自然 */
+const LIP_LEAD_SEC = 0.04
+const LIP_GAIN = 0.95
+const LIP_PARAM = 'ParamMouthOpenY'
+
+function stopLipSync(audio) {
+  if (audio && lipSync.audio !== audio) return
+  lipSync.audio = null
+  lipSync.envelope = null
+  lipSync.remoteStartAt = 0
+}
+
+/** 聊天窗语音的口型：payload = { envelope } 开始，{ stop: true } 结束 */
+function handleRemoteLipSync(payload) {
+  if (!payload || payload.stop || !payload.envelope || !window.PetLipSync) {
+    if (!lipSync.audio) stopLipSync()
+    return
+  }
+  if (lipSync.audio) return
+  lipSync.envelope = payload.envelope
+  lipSync.remoteStartAt = performance.now()
+}
+
+/** 每帧：在表情/动作写完之后，把说话的张嘴幅度混进嘴参数 */
+function applyLipSync(cubismModel, owned) {
+  if (!lipSync.smoother || !model || !model.parameterById) return
+  const now = performance.now()
+  const dt = lipSync.lastAt ? (now - lipSync.lastAt) / 1000 : 0
+  lipSync.lastAt = now
+  let active = false
+  let target = 0
+  if (lipSync.envelope) {
+    let time = -1
+    if (lipSync.audio) {
+      if (!lipSync.audio.paused && !lipSync.audio.ended) time = lipSync.audio.currentTime
+    } else if (lipSync.remoteStartAt) {
+      time = (now - lipSync.remoteStartAt) / 1000
+      // 聊天窗没发来结束通知（比如窗口被关）时，按包络时长自行收尾
+      if (time > lipSync.envelope.duration + 0.3) {
+        stopLipSync()
+        time = -1
+      }
+    }
+    if (time >= 0) {
+      active = true
+      target = window.PetLipSync.sampleEnvelope(lipSync.envelope, time + LIP_LEAD_SEC)
+    }
+  }
+  // 说话状态与音量也供生动层用（说话伴随动作），与口型开关无关
+  lipSync.speaking = active
+  lipSync.level = target
+  const { level, weight } = lipSync.smoother.step(target, active && lipSync.enabled, dt)
+  if (weight <= 0) return
+  const p = model.parameterById.get(LIP_PARAM)
+  // 编舞/模型自带动作正在驱动嘴时让位，不和它们抢
+  if (!p || !p.writable || (owned && owned.has(LIP_PARAM)) || model.motionClaims.has(LIP_PARAM)) return
+  const current = model.getParameterValue(LIP_PARAM)
+  const base = Number.isFinite(current) ? current : p.default
+  const open = p.default + (p.max - p.default) * level * LIP_GAIN
+  model.setParameter(LIP_PARAM, Math.max(p.min, Math.min(p.max, base + (open - base) * weight)), cubismModel)
+}
+
+// ------------------------------------------------------------ 生动层 + 表演层
+// 每帧最后执行，在当前值上叠加，所以不覆盖表情、视线和导演手势。
+//   生动层  微动 + 说话伴随（liveliness.js）
+//   表演层  意图级手势 + 持续情绪（acting.js）
+const LIVELINESS_KEY = 'pet-liveliness'
+let livelinessStrength = 1
+try {
+  const saved = Number(window.localStorage.getItem(LIVELINESS_KEY))
+  if (window.localStorage.getItem(LIVELINESS_KEY) !== null && Number.isFinite(saved)) livelinessStrength = Math.max(0, Math.min(1.5, saved))
+} catch (_) { /* storage may be unavailable */ }
+const liveliness = window.PetLiveliness ? window.PetLiveliness.create() : null
+const acting = window.PetActing ? window.PetActing.create() : null
+let livelinessLastAt = 0
+// 表演幅度：手势、情绪底姿和身体摆动的整体倍率
+const ACTING_KEY = 'pet-acting-scale'
+let actingScale = 1
+try {
+  const saved = Number(window.localStorage.getItem(ACTING_KEY))
+  if (window.localStorage.getItem(ACTING_KEY) !== null && Number.isFinite(saved)) actingScale = Math.max(0, Math.min(2, saved))
+} catch (_) { /* storage may be unavailable */ }
+function setActingScale(value) {
+  if (!Number.isFinite(value)) return
+  actingScale = Math.max(0, Math.min(2, value))
+  try { window.localStorage.setItem(ACTING_KEY, String(actingScale)) } catch (_) { /* ignore */ }
+}
+/** 表演层自己打开的模型表情；只关自己开的，不动用户在控制台里手动开的 */
+const actingExpressions = new Set()
+const actingDismissed = new Set()
+function syncActingExpressions(names) {
+  if (!model || !model.expressionParams) return
+  const want = new Set(actingScale > 0 ? names : [])
+  let changed = false
+  for (const name of [...actingExpressions]) {
+    // 被别处清掉了（清表情、点击反应）：忘掉它，并且在这次情绪/手势期间不再重开
+    if (!expressionStack.includes(name)) { actingExpressions.delete(name); if (want.has(name)) actingDismissed.add(name); continue }
+    if (want.has(name)) continue
+    expressionStack.splice(expressionStack.indexOf(name), 1)
+    actingExpressions.delete(name)
+    changed = true
+  }
+  for (const name of [...actingDismissed]) if (!want.has(name)) actingDismissed.delete(name)
+  for (const name of want) {
+    if (actingExpressions.has(name) || actingDismissed.has(name) || expressionStack.includes(name)) continue
+    if (!(model.expressionParams.get(name) || []).length) continue
+    expressionStack.push(name)
+    actingExpressions.add(name)
+    changed = true
+  }
+  if (changed) applyExpressionStack()
+}
+/**
+ * 通道 → 参数。bound 取角色专门绑定的输入参数；fallback 是 Cubism 标准参数名
+ * （物理输出不可写，会被自动跳过）。degrees 的通道按 ±30 的量程换算。
+ * boundSign / fallbackSign 把"画面方向"换成该参数的正负：本角色实测
+ * AngleX 正=脸朝画面左、AngleY 正=低头；Cubism 标准 ParamAngleY 正=抬头。
+ */
+const ACTING_CHANNELS = {
+  headX: { bound: 'headX', fallback: ['ParamAngleX'], degrees: true, boundSign: -1 },
+  headY: { bound: 'headY', fallback: ['ParamAngleY'], degrees: true, fallbackSign: -1 },
+  headZ: { bound: 'headZ', fallback: ['ParamAngleZ'], degrees: true },
+  bodyX: { bound: 'bodyX', fallback: ['ParamBodyAngleX'], degrees: true },
+  bodyY: { known: ['PositionY'], fallback: ['ParamBodyAngleY'], degrees: true },
+  eyeX: { bound: 'eyeX', fallback: ['ParamEyeBallX'] },
+  eyeY: { bound: 'eyeY', fallback: ['ParamEyeBallY'] },
+  browL: { fallback: ['ParamBrowLY'] },
+  browR: { fallback: ['ParamBrowRY'] },
+  eyeOpen: { fallback: ['ParamEyeLOpen', 'ParamEyeROpen'] },
+  mouthForm: { fallback: ['ParamMouthForm'] },
+  eyeSmile: { known: ['EyeSmile'], fallback: ['ParamEyeLSmile', 'ParamEyeRSmile'] },
+  // 上身前倾：本角色的 LeanInput 负值是向前俯身
+  lean: { known: ['LeanInput'], fallback: ['ParamBodyAngleY'], degrees: true, boundSign: -1 },
+  shock: { known: ['SHOCKEYE'], fallback: [] },
+}
+
+function setLiveliness(value) {
+  if (!Number.isFinite(value)) return
+  livelinessStrength = Math.max(0, Math.min(1.5, value))
+  try { window.localStorage.setItem(LIVELINESS_KEY, String(livelinessStrength)) } catch (_) { /* ignore */ }
+}
+
+/** 做一个表演层手势；name 是 acting.js 里的 id */
+function performGesture(name, options) {
+  return Boolean(acting && acting.play(name, options || {}))
+}
+
+function setActingMood(name, intensity) {
+  return Boolean(acting && acting.setMood(name, intensity))
+}
+
+function applyLiveliness(cubismModel, owned) {
+  if (!model || !model.parameterById || (!liveliness && !acting)) return
+  const now = performance.now()
+  const dt = livelinessLastAt ? (now - livelinessLastAt) / 1000 : 0
+  livelinessLastAt = now
+  stepSpeechCues(now)
+  const bindings = model.parameterCatalog?.bindings || {}
+  const act = acting ? acting.step(dt) : { pose: {}, energy: 1, expressions: [] }
+  syncActingExpressions(act.expressions || [])
+  const live = liveliness && livelinessStrength > 0
+    ? liveliness.step(now / 1000, dt, { speaking: Boolean(lipSync.speaking), level: lipSync.level || 0, nodSign: 1 })
+    : null
+  // 情绪改变微动和说话伴随的力度：开心更活泼，难过、犯困更沉
+  const liveGain = livelinessStrength * act.energy
+  for (const [role, channel] of Object.entries(ACTING_CHANNELS)) {
+    const boundId = channel.bound && bindings[channel.bound]
+    const knownIds = channel.known && channel.known.every((id) => model.parameterById.has(id)) ? channel.known : null
+    const ids = boundId ? [boundId] : knownIds || channel.fallback
+    const sign = boundId || knownIds ? channel.boundSign || 1 : channel.fallbackSign || 1
+    const pose = (act.pose[role] || 0) * actingScale
+    const micro = live ? (live.micro[role] || 0) * liveGain : 0
+    const talk = live ? (live.speech[role] || 0) * liveGain : 0
+    for (const id of ids) {
+      const p = model.parameterById.get(id)
+      if (!p || !p.writable || !(p.max > p.min)) continue
+      // 编舞和模型自带动作是逐帧编排好的，不在上面加东西
+      if ((owned && owned.has(id)) || model.motionClaims.has(id)) continue
+      // 导演手势正在驱动的通道不叠说话伴随（避免两个点头相加）
+      let delta = pose + micro + (directorRuntime.values.has(id) ? 0 : talk)
+      if (!delta) continue
+      delta *= sign * (channel.degrees ? (p.max - p.min) / 60 : 1)
+      const current = model.getParameterValue(id)
+      const base = Number.isFinite(current) ? current : p.default
+      model.setParameter(id, Math.max(p.min, Math.min(p.max, base + delta)), cubismModel)
+    }
+  }
+}
+
+// ------------------------------------------------------------ 台词行内标记的时机
+// 标记写在台词的某个字前面。有语音时按语音播放进度触发（动作落在那个字上）；
+// 没有语音时按打字速度触发。
+let ttsEnabled = false
+let speechCueSet = null
+/** 等语音合成的最长时间；超过就不等了，按打字速度走 */
+const CUE_WAIT_MS = 9000
+const CUE_CHAR_MS = 35
+
+function scheduleSpeechCues(cues, length) {
+  if (speechCueSet) for (const cue of speechCueSet.cues) if (!speechCueSet.fired.has(cue) && cue.type === 'mood') triggerDirectorCue(cue)
+  speechCueSet = cues && cues.length
+    ? { cues, length: Math.max(1, length), fired: new Set(), audio: null, startedAt: performance.now(), typingFrom: 0 }
+    : null
+  return speechCueSet
+}
+
+function stepSpeechCues(now) {
+  const set = speechCueSet
+  if (!set) return
+  let progress = 0
+  if (set.audio) {
+    const duration = Number.isFinite(set.audio.duration) && set.audio.duration > 0 ? set.audio.duration : 0
+    if (set.audio.ended || set.audio.error) progress = 1
+    else if (duration) progress = (set.audio.currentTime + 0.12) / duration
+  } else {
+    if (!set.typingFrom && (!ttsEnabled || now - set.startedAt > CUE_WAIT_MS)) set.typingFrom = ttsEnabled ? now : set.startedAt
+    if (set.typingFrom) progress = (now - set.typingFrom) / (set.length * CUE_CHAR_MS)
+  }
+  for (const cue of set.cues) {
+    if (set.fired.has(cue) || cue.charIndex / set.length > progress) continue
+    set.fired.add(cue)
+    triggerDirectorCue(cue)
+  }
+  if (set.fired.size >= set.cues.length) speechCueSet = null
+}
+
 /** 说话：把台词交给主进程的 GPT-SoVITS 合成，拿回 wav 播放（失败不影响气泡） */
 async function speak(text, lang) {
   const say = String(text || '').trim()
   if (!say) return
   if (!window.pet || typeof window.pet.tts !== 'function') return
   console.error('[speak]', lang, say.slice(0, 30))
+  const cueSet = speechCueSet
   try {
     const result = await window.pet.tts(say, lang)
     if (!result || !result.ok || !result.audio) return
@@ -164,17 +404,33 @@ async function speak(text, lang) {
       }
       currentSpeechAudio = null
     }
+    stopLipSync()
     // 用 blob URL 播放，避免超长 data: 字符串把渲染进程压垮
     const bytes = Uint8Array.from(atob(result.audio), (c) => c.charCodeAt(0))
     const blob = new Blob([bytes], { type: 'audio/wav' })
     const url = URL.createObjectURL(blob)
     const audio = new Audio(url)
     currentSpeechAudio = audio
+    if (cueSet && cueSet === speechCueSet && !cueSet.typingFrom) cueSet.audio = audio
+    // 口型：播放前把整段音量包络算好（解析失败就只出声、不动嘴）
+    let envelope = null
+    try {
+      envelope = window.PetLipSync ? window.PetLipSync.buildMouthEnvelope(bytes) : null
+    } catch {
+      envelope = null
+    }
+    if (envelope) {
+      lipSync.audio = audio
+      lipSync.envelope = envelope
+      lipSync.remoteStartAt = 0
+    }
     audio.addEventListener('ended', () => {
       URL.revokeObjectURL(url)
       if (currentSpeechAudio === audio) currentSpeechAudio = null
+      stopLipSync(audio)
     })
-    audio.play().catch(() => {})
+    audio.addEventListener('error', () => stopLipSync(audio))
+    audio.play().catch(() => stopLipSync(audio))
   } catch (error) {
     /* TTS 不可用时不打断气泡 */
   }
@@ -187,6 +443,14 @@ function triggerDirectorCue(cue) {
   if (!cue) return
   if (cue.type === 'clearExpression') {
     clearExpressionNow()
+    return
+  }
+  if (cue.type === 'perform') {
+    performGesture(cue.name, { side: cue.side, intensity: cue.intensity })
+    return
+  }
+  if (cue.type === 'mood') {
+    setActingMood(cue.name, cue.intensity)
     return
   }
   if (cue.type === 'pose') {
@@ -252,11 +516,12 @@ function showBubble(text, ms = 6500, sayJa = '') {
     bubbleTypeTimer = null
   }
   bubble.hidden = false
+  scheduleSpeechCues(parsed.cues, speech.length)
   // 默认日语朗读；没有日语版时退回中文
   if (sayJa) speak(sayJa, 'ja')
   else speak(speech, 'zh')
   if (parsed.cues.length) {
-    // 有标记：逐字显示，标记命中时触发动作/表情
+    // 有标记：逐字显示；动作由 stepSpeechCues 按语音进度触发
     let i = 0
     if (bubbleText) bubbleText.textContent = ''
     else bubble.textContent = ''
@@ -265,9 +530,6 @@ function showBubble(text, ms = 6500, sayJa = '') {
       i += 1
       if (bubbleText) bubbleText.textContent = speech.slice(0, i)
       else bubble.textContent = speech.slice(0, i)
-      for (const cue of parsed.cues) {
-        if (cue.charIndex === i) triggerDirectorCue(cue)
-      }
       if (i >= speech.length) {
         window.clearInterval(bubbleTypeTimer)
         bubbleTypeTimer = null
@@ -350,6 +612,8 @@ async function bootEngine() {
   const info = await window.pet.ready()
   headlessTest = Boolean(info.headless)
   if (info.tts && info.tts.sayLanguage) ttsSayLanguage = info.tts.sayLanguage
+  if (info.tts) lipSync.enabled = info.tts.lipSync !== false
+  if (info.tts) ttsEnabled = info.tts.enabled !== false
   character = info.character || {
     id: 'dafeiyu',
     name: '大肥鱼',
@@ -464,6 +728,8 @@ async function loadCharacter(next) {
         if (model.hasParameter(id)) model.setParameter(id, value, cubismModel)
       })
     }
+    applyLipSync(cubismModel, owned)
+    applyLiveliness(cubismModel, owned)
   }
   model.onSample = sampleAnimationFrame
   if (barName) barName.textContent = next.name || next.id || '角色'}
@@ -3100,6 +3366,16 @@ window.pet.onEvent((payload) => {
     handleSettingsCommand(payload.payload)
     return
   }
+  if (payload.type === 'lip-sync') {
+    handleRemoteLipSync(payload)
+    return
+  }
+  if (payload.type === 'acting') {
+    // 主进程发来的即时表演；未知的名字会被表演层拒绝
+    if (typeof payload.gesture === 'string') performGesture(payload.gesture)
+    if (typeof payload.mood === 'string') setActingMood(payload.mood)
+    return
+  }
   if (payload.type === 'sayRandom') {
     sayRandom()
     return
@@ -3349,7 +3625,7 @@ function reportSettingsState() {
   if (!window.pet || typeof window.pet.report !== 'function') return
   window.pet.report({
     type: 'settings-state',
-    state: { gazeStrength, gazeBody, gazeSpeed, breathFactor, snapDistance, gazeEnabled, clickThrough: autoClickThrough, idleDirectorEnabled, bindings: model?.parameterCatalog?.bindings || {},appearance,appearanceStatus },
+    state: { gazeStrength, gazeBody, gazeSpeed, breathFactor, liveliness: livelinessStrength, actingScale, snapDistance, gazeEnabled, clickThrough: autoClickThrough, idleDirectorEnabled, bindings: model?.parameterCatalog?.bindings || {},appearance,appearanceStatus },
   })
 }
 
@@ -3380,6 +3656,13 @@ function handleSettingsCommand(payload) {
     case 'ttsSayLanguage':
       if (value === 'ja' || value === 'zh') ttsSayLanguage = value
       break
+    case 'ttsConfig':
+      if (value && typeof value === 'object') {
+        if (typeof value.lipSync === 'boolean') lipSync.enabled = value.lipSync
+        if (typeof value.enabled === 'boolean') ttsEnabled = value.enabled
+        if (value.sayLanguage === 'ja' || value.sayLanguage === 'zh') ttsSayLanguage = value.sayLanguage
+      }
+      break
     case 'gazeStrength':
       changeGazePref({ strength: value / 100 })
       break
@@ -3391,6 +3674,18 @@ function handleSettingsCommand(payload) {
       break
     case 'gazeSpeed':
       changeGazePref({ speed: value / 100 })
+      break
+    case 'perform':
+      if (typeof value === 'string') performGesture(value)
+      break
+    case 'mood':
+      if (typeof value === 'string') setActingMood(value, 1)
+      break
+    case 'actingScale':
+      setActingScale(value / 100)
+      break
+    case 'liveliness':
+      setLiveliness(value / 100)
       break
     case 'breathFactor':
       if (Number.isFinite(value)) {

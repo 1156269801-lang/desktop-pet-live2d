@@ -36,6 +36,9 @@ function logMessage(kind, text, options = {}) {
 
 /** 独立聊天窗的语音：回复走主进程 GPT-SoVITS，播放完释放 */
 let currentAudio = null
+function sendLipSync(payload) {
+  if (window.pet && typeof window.pet.lipSync === 'function') window.pet.lipSync(payload)
+}
 async function speak(text, lang) {
   const say = String(text || '').trim()
   if (!say || !window.pet || typeof window.pet.tts !== 'function') return
@@ -51,16 +54,34 @@ async function speak(text, lang) {
       }
       currentAudio = null
     }
+    sendLipSync({ stop: true })
     const bytes = Uint8Array.from(atob(result.audio), (c) => c.charCodeAt(0))
     const blob = new Blob([bytes], { type: 'audio/wav' })
     const url = URL.createObjectURL(blob)
     const audio = new Audio(url)
     currentAudio = audio
+    // 模型在主窗：这里只算口型包络，开始出声时交给主窗去动嘴
+    let envelope = null
+    try {
+      envelope = window.PetLipSync ? window.PetLipSync.buildMouthEnvelope(bytes) : null
+    } catch {
+      envelope = null
+    }
+    const stop = () => {
+      if (currentAudio === audio) sendLipSync({ stop: true })
+    }
+    if (envelope) {
+      audio.addEventListener('playing', () => {
+        if (currentAudio === audio) sendLipSync({ envelope: { stepMs: envelope.stepMs, values: envelope.values } })
+      }, { once: true })
+    }
     audio.addEventListener('ended', () => {
       URL.revokeObjectURL(url)
+      stop()
       if (currentAudio === audio) currentAudio = null
     })
-    audio.play().catch(() => {})
+    audio.addEventListener('error', stop)
+    audio.play().catch(stop)
   } catch {
     /* TTS 不可用不影响文字 */
   }

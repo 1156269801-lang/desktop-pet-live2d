@@ -39,7 +39,8 @@
     "refAudio": "",
     "lang": "zh",
     "refLang": "ja",
-    "sayLanguage": "ja"
+    "sayLanguage": "ja",
+    "lipSync": true
   },
   "debug": {
     "captureAfterMs": 0

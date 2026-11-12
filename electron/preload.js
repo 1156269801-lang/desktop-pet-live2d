@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('pet', {
   openConsoleWindow: () => ipcRenderer.invoke('console:open'),
   report: (payload) => ipcRenderer.invoke('pet:report', payload),
   tts: (text, lang) => ipcRenderer.invoke('pet:tts', text, lang),
+  lipSync: (payload) => ipcRenderer.send('pet:lip-sync', payload),
   openChatWindow: () => ipcRenderer.invoke('chat:open'),
   closeChatWindow: () => ipcRenderer.send('chat:close'),
   openPanelWindow: (x, y) => ipcRenderer.invoke('panel:open', { x, y }),

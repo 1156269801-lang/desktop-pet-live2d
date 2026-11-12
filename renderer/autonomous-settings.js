@@ -55,7 +55,7 @@
     not_authorized: '尚未保存自主运行授权。', provider_not_ready: 'API 未就绪，请检查下方直连配置、远程授权与密钥。',
     stabilization: '先等待环境稳定，再尝试下一轮。', stable_window: '先等待环境稳定，再尝试下一轮。',
   }
-  const eventLabels = { 'session-start': '会话开始', 'scene-change': '稳定场景变化', interaction: '本机互动', 'routine-transition': '作息时段变化', 'manual-once': '手动单轮' }
+  const eventLabels = { commentary: '搭子定时点评', 'session-start': '会话开始', 'scene-change': '稳定场景变化', interaction: '本机互动', 'routine-transition': '作息时段变化', 'manual-once': '手动单轮' }
   const routineLabels = { night: '夜间', morning: '上午', afternoon: '下午', evening: '晚间' }
   const budgetLabels = {
     BUDGET_LIMIT: '已到调用次数上限；不是金额或费用上限。',
@@ -87,7 +87,7 @@
       }
     }
     config.mode = raw.mode === 'api' ? 'api' : 'rules'
-    config.tone = ['caring', 'tsundere', 'quiet'].includes(raw.tone) ? raw.tone : 'caring'
+    config.tone = ['caring', 'tsundere', 'quiet', 'streamer'].includes(raw.tone) ? raw.tone : 'caring'
     config.localLines = typeof raw.localLines === 'string' ? raw.localLines.slice(0, 2000) : ''
     return config
   }
@@ -170,6 +170,8 @@
       ? fields.allowWindowTitle.checked
         ? '离线按规则选语气与台词；已授权标题仅在本地判断场景，不理解人设、不联网。'
         : '离线按规则选语气与台词，不理解人设、不联网；标题默认不读。'
+      : byId('autonomyTone').value === 'streamer'
+        ? '直播搭子会按检查间隔定时请求 API 点评屏幕（需授权标题或截图），比其它语气调用更频繁、费用更高；仍受最短安静时间和次数上限约束。全屏游戏需关闭「全屏时暂停」。'
       : '只有符合条件的新事件才请求 API；请求会发送人设、当前会话短期上下文与已授权感知并可能计费。无事件不调用，不读取显式记忆库。'
     const phase = byId('autonomyPhase')
     phase.textContent = stopping ? '正在停止' : state ? phaseLabels[state.phase] || (state.running ? '等待运行条件' : '已停止') : '尚未读取'
@@ -232,7 +234,7 @@
       message('请填写范围内的整数；频率与会话数值不能留空。', true)
       fields[key].focus({ preventScroll: true }); return false
     }
-    if (!['rules', 'api'].includes(config.mode) || !['caring', 'tsundere', 'quiet'].includes(config.tone)
+    if (!['rules', 'api'].includes(config.mode) || !['caring', 'tsundere', 'quiet', 'streamer'].includes(config.tone)
       || config.localLines.length > 2000) {
       message('设定格式无效；自定义台词最多 2000 字。', true); return false
     }

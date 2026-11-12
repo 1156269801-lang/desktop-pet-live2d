@@ -1,7 +1,7 @@
 'use strict'
 
 /** 导演/API 页的 TTS 子面板：读 config.tts，保存走 settings:command('ttsConfig')。 */
-(function () {
+;(function () {
   const api = window.settings
   if (!api) return
   const el = (id) => document.getElementById(id)
@@ -9,6 +9,7 @@
   function fill(tts) {
     if (!tts) return
     if (el('ttsEnabled')) el('ttsEnabled').checked = tts.enabled !== false
+    if (el('ttsLipSync')) el('ttsLipSync').checked = tts.lipSync !== false
     if (el('ttsUrl')) el('ttsUrl').value = tts.url || ''
     if (el('ttsRefAudio')) el('ttsRefAudio').value = tts.refAudio || ''
     if (el('ttsRefLang')) el('ttsRefLang').value = tts.refLang || 'ja'
@@ -28,6 +29,7 @@
     const status = el('ttsStatus')
     const payload = {
       enabled: el('ttsEnabled') ? el('ttsEnabled').checked : true,
+      lipSync: el('ttsLipSync') ? el('ttsLipSync').checked : true,
       url: ((el('ttsUrl') && el('ttsUrl').value) || '').trim(),
       refAudio: ((el('ttsRefAudio') && el('ttsRefAudio').value) || '').trim(),
       refLang: (el('ttsRefLang') && el('ttsRefLang').value) || 'ja',

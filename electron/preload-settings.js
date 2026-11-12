@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld('settings', {
   autonomyOnce: () => ipcRenderer.invoke('autonomy:once'),
   directorState: () => ipcRenderer.invoke('director:state'),
   directorSave: (body) => ipcRenderer.invoke('director:save', body),
+  directorConnect: (body) => ipcRenderer.invoke('director:connect', body),
+  directorTest: () => ipcRenderer.invoke('director:test'),
   directorClearKey: () => ipcRenderer.invoke('director:clear-key'),
   directorPreview: (body) => ipcRenderer.invoke('director:preview', body),
   directorCancel: () => ipcRenderer.invoke('director:cancel'),
