@@ -1,6 +1,31 @@
 ﻿# 更新说明
 
-## v1.1.1（当前）
+## v1.1.2（当前）
+
+### 新增
+
+- **WPF 启动器** `launcher-wpf/`：九个页面全量实现（启动 / 服务 / 设置 / 高级 / 记忆 / 陪伴 / 维护 / 日志 / 关于）。
+  走 .NET Framework 4.8 自带的 WPF + `XamlReader` 运行时加载 XAML，不引入 .NET SDK、不装 Desktop Runtime、不需要 MSBuild 编译 XAML，仍然是「PowerShell + 零依赖」。
+  后端完全复用 `services.ps1`，语义未改。
+- **ACG 风格图标**：换成鲸鱼娘头像（蓝发星星眼 + 水手服 + 发间小鲸鱼）。`launcher.ico` 十档（16–256），另出 `logo-{40,56,80,128,256}.png` 供侧栏、卡片、关于页与高 DPI 使用；16/24/32 三档单独做对比度与锐度强化，避免缩小后糊成一团。WinForms 版同步换用。
+
+### 改进
+
+- **WinForms 版启动器 UI 精修**（`launcher/`）：
+  - 无边框窗体改用 `SetWindowRgn` 手工裁圆角——DWM 的 `DWMWA_WINDOW_CORNER_PREFERENCE` 对 `FormBorderStyle=None` 无效
+  - logo 从 `DrawString` 画 emoji 改为预渲染 PNG，不再依赖系统 emoji 字体
+  - 状态灯从 `●` 字符改为带光晕的 PNG，按 ok/warn/bad/idle 四态切图
+  - 所有按钮默认圆角（原本 23 个调用里只有 10 个传了 `-Rounded`）
+  - 输入框与列表加 `Round-Box`：无边框控件下面垫一层圆角色块，位置不变
+  - 带描边的按钮改为自绘 `GraphicsPath` 圆角边框（`FlatAppearance` 画的是矩形，被 Region 裁完四角会剩直角）
+  - 按钮 hover 内阴影：顶部 1px 高光 + 底部 1px 暗线，按下时反转为内凹
+
+### 修复
+
+- 启动器顶部版本号被标题 Label 覆盖（标题宽 380 从 x=20 铺到 400，把 x=346 的版本号盖住了）
+- `launcher-wpf/launcher.ps1` 里重复定义 `$ConfigFile` 覆盖了 `services.ps1` 的计算，导致找不到 `config.json`（实际在 `app\` 下）
+- 启动器配色全部按 WCAG 2.1 实测，浅色最低 4.49:1、深色最低 4.10:1，见 `launcher/UI设计方案-双配色.md`
+## v1.1.1
 
 ### 新增
 

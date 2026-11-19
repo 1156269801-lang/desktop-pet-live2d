@@ -1,6 +1,6 @@
 ﻿# 大肥鱼桌宠（Live2D Desktop Pet）
 
-基于 **Electron + Live2D** 的桌面宠物，当前版本 **v1.1.1**。
+基于 **Electron + Live2D** 的桌面宠物，当前版本 **v1.1.2**。
 
 她会说话、对口型，说话时跟着语气点头抬眉；聊天时由模型在台词里安排手势和情绪，像虚拟主播一样表演；也可以在你玩游戏、写代码时坐在旁边看屏幕点评。模型来自 DeepSeek 免费公皮（不随仓库分发）。
 
@@ -85,6 +85,18 @@ npm test
 - **配色与对比度**：全部按 WCAG 2.1 实测，最低 4.49:1，详见 `launcher/UI设计方案-双配色.md`
 - **零窗口启动**：`Launcher.cs` 用 .NET Framework 自带的 `csc.exe` 编译成 GUI 子系统 exe，双击不闪控制台
 
+
+### WPF 版启动器（`launcher-wpf/`）
+
+同一套功能的另一种实现，界面用 WPF 绘制：圆角、投影、渐变、状态灯呼吸动画都是硬件抗锯齿，比 WinForms 版干净。
+
+```powershell
+powershell -STA -NoProfile -ExecutionPolicy Bypass -File .\launcher-wpf\launcher.ps1
+```
+
+WPF 必须跑在 STA 线程上，脚本检测到非 STA 会自动用 `-STA` 重启自己一次。
+
+用的是 .NET Framework 4.8 自带的 WPF + `XamlReader` 运行时加载 `ui.xaml`，**不需要 .NET SDK、不需要 Desktop Runtime、不需要 MSBuild 编译 XAML**。后端仍然调 `services.ps1`，两版可以并存。
 ### 直接运行
 
 ```powershell
@@ -103,7 +115,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\launcher\launcher.ps1
 产物需要与 `launcher\`、`app\`、`runtime\`、`data\` 同处一个目录树。目录结构见 `launcher\services.ps1` 顶部的路径定义。
 ## Windows 安装包
 
-安装开发依赖后运行 `npm run dist` 生成 `dist/大肥鱼桌宠 Setup 1.1.1.exe`；`npm run dist:dir` 仅生成解包目录。当前构建未签名。安装包不含模型、ASR/TTS 服务或权重，也不迁移源码版的本地配置。安装后在托盘打开设置，自行导入有权使用的角色；独立配置目录为 `%APPDATA%\DafeiyuDesktopPet`。
+安装开发依赖后运行 `npm run dist` 生成 `dist/大肥鱼桌宠 Setup 1.1.2.exe`；`npm run dist:dir` 仅生成解包目录。当前构建未签名。安装包不含模型、ASR/TTS 服务或权重，也不迁移源码版的本地配置。安装后在托盘打开设置，自行导入有权使用的角色；独立配置目录为 `%APPDATA%\DafeiyuDesktopPet`。
 
 在主窗或设置窗拖入一个模型文件夹或 ZIP 即可导入并切换；主窗开启了自动鼠标穿透时，请在角色可点击区域放下，或直接使用设置窗。
 

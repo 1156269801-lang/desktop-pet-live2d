@@ -1,6 +1,6 @@
 {
     "name":  "dsh-desktop-pet",
-    "version":  "1.1.1",
+    "version": "1.1.2",
     "private":  false,
     "description":  "大肥鱼桌面宠物：ASR 语音输入、口型同步、表演层与情绪、台词行内标记、直播搭子、可选本地 TTS",
     "main":  "electron/main.js",
