@@ -83,6 +83,25 @@ function Set-Round($Panel,[int]$Corner=12) {
     } finally { $shape.Dispose() }
 }
 
+function Round-Box($Control,[int]$Pad=5,[int]$Corner=8) {
+    # 给无边框输入控件垫一层圆角色块，位置不变，只在下面加视觉圆角
+    try {
+        $parent = $Control.Parent
+        if (-not $parent) { return }
+        $b = $Control.Bounds
+        $holder = New-Object Windows.Forms.Panel
+        $holder.BackColor = $surface2
+        $parent.Controls.Add($holder)
+        $holder.SetBounds($b.X - $Pad, $b.Y - $Pad, $b.Width + $Pad * 2, $b.Height + $Pad * 2)
+        [void]$holder.GetType().InvokeMember('DoubleBuffered',
+            [Reflection.BindingFlags]::SetProperty -bor [Reflection.BindingFlags]::Instance -bor [Reflection.BindingFlags]::NonPublic,
+            $null, $holder, $true)
+        Set-Round $holder $Corner
+        $Control.BorderStyle = 'None'
+        $Control.BackColor = $surface2
+        $Control.BringToFront()
+    } catch { }
+}
 function Dot($Parent,[int]$X,[int]$Y,[int]$W,[int]$H) {
     $pic = New-Object Windows.Forms.PictureBox
     $pic.SizeMode = 'Zoom'; $pic.BackColor = [Drawing.Color]::Transparent
@@ -150,7 +169,29 @@ function Button($Parent,[string]$Text,[int]$X,[int]$Y,[int]$W,[int]$H,$Fill=$car
     $button.Add_MouseUp({param($sender,$eventArgs) if($sender.Enabled){$sender.BackColor=$sender.Tag.Over}})
     $button.Cursor = [Windows.Forms.Cursors]::Hand
     $button=Place $Parent $button $X $Y $W $H
-    if($Rounded){Set-Round $button 8}
+    if($Rounded){
+        Set-Round $button 8
+        # FlatAppearance 的边框是矩形，被 Region 裁完四角会剩直角，改自绘圆角边框
+        if($null -ne $Outline){
+            $button.FlatAppearance.BorderSize = 0
+            $edge = $Outline
+            $button.Add_Paint({param($sender,$eventArgs)
+                $g = $eventArgs.Graphics; $g.SmoothingMode = 'AntiAlias'
+                $pen = [Drawing.Pen]::new($edge, 1)
+                $path = New-Object Drawing.Drawing2D.GraphicsPath
+                $r = 16
+                $w = $sender.Width - 1; $h = $sender.Height - 1
+                try {
+                    $path.AddArc(0, 0, $r, $r, 180, 90)
+                    $path.AddArc($w - $r, 0, $r, $r, 270, 90)
+                    $path.AddArc($w - $r, $h - $r, $r, $r, 0, 90)
+                    $path.AddArc(0, $h - $r, $r, $r, 90, 90)
+                    $path.CloseFigure()
+                    $g.DrawPath($pen, $path)
+                } finally { $pen.Dispose(); $path.Dispose() }
+            }.GetNewClosure())
+        }
+    }
     return $button
 }
 function Logo($Parent,[int]$Left,[int]$Top,[int]$Size) {
@@ -535,18 +576,18 @@ $personaCard=Card $advancedPage 0 48 752 200
 $null=Label $personaCard '统一人设' 20 12 140 28 13 -Bold
 $personaText=Place $personaCard (New-Object Windows.Forms.TextBox) 20 48 712 130
 $personaText.Multiline=$true; $personaText.ScrollBars='Vertical'; $personaText.Font=[Drawing.Font]::new('Microsoft YaHei UI',10)
-$personaText.BackColor=$surface2; $personaText.ForeColor=$text; $personaText.BorderStyle='FixedSingle'
+$personaText.BackColor=$surface2; $personaText.ForeColor=$text; $personaText.BorderStyle='None'; Round-Box $personaText
 
 $budgetCard=Card $advancedPage 0 264 364 124
 $null=Label $budgetCard '上下文预算' 20 12 200 28 13 -Bold
 $null=Label $budgetCard '输入令牌上限' 20 52 120 24 9 $muted
 $budgetInput=Place $budgetCard (New-Object Windows.Forms.NumericUpDown) 150 50 180 28
 $budgetInput.Minimum=1000; $budgetInput.Maximum=200000; $budgetInput.Value=32000; $budgetInput.Increment=1000
-$budgetInput.BackColor=$surface2; $budgetInput.ForeColor=$text; $budgetInput.BorderStyle='FixedSingle'
+$budgetInput.BackColor=$surface2; $budgetInput.ForeColor=$text; $budgetInput.BorderStyle='None'; Round-Box $budgetInput
 $null=Label $budgetCard '输出令牌上限' 20 86 120 24 9 $muted
 $budgetOutput=Place $budgetCard (New-Object Windows.Forms.NumericUpDown) 150 84 180 28
 $budgetOutput.Minimum=500; $budgetOutput.Maximum=16000; $budgetOutput.Value=8000; $budgetOutput.Increment=500
-$budgetOutput.BackColor=$surface2; $budgetOutput.ForeColor=$text; $budgetOutput.BorderStyle='FixedSingle'
+$budgetOutput.BackColor=$surface2; $budgetOutput.ForeColor=$text; $budgetOutput.BorderStyle='None'; Round-Box $budgetOutput
 
 $shareCard=Card $advancedPage 388 264 364 124
 $null=Label $shareCard '限时共享' 20 12 200 28 13 -Bold
@@ -555,7 +596,7 @@ $shareEnabled.Text='启用限时共享链接'; $shareEnabled.ForeColor=$text; $s
 $null=Label $shareCard '有效期（分钟）' 20 86 120 24 9 $muted
 $shareDuration=Place $shareCard (New-Object Windows.Forms.NumericUpDown) 150 84 180 28
 $shareDuration.Minimum=5; $shareDuration.Maximum=1440; $shareDuration.Value=30; $shareDuration.Increment=5
-$shareDuration.BackColor=$surface2; $shareDuration.ForeColor=$text; $shareDuration.BorderStyle='FixedSingle'
+$shareDuration.BackColor=$surface2; $shareDuration.ForeColor=$text; $shareDuration.BorderStyle='None'; Round-Box $shareDuration
 
 $diagCard=Card $advancedPage 0 404 752 80
 $null=Label $diagCard '控制 API 诊断' 20 12 200 28 13 -Bold
@@ -578,16 +619,16 @@ $memoryPage=$content['记忆']; $null=Label $memoryPage '记忆管理' 0 0 180 3
 $memoryCard=Card $memoryPage 0 48 752 420
 $null=Label $memoryCard '显式记忆库' 20 12 200 28 13 -Bold
 $memorySearch=Place $memoryCard (New-Object Windows.Forms.TextBox) 240 12 360 28
-$memorySearch.BackColor=$surface2; $memorySearch.ForeColor=$text; $memorySearch.BorderStyle='FixedSingle'
+$memorySearch.BackColor=$surface2; $memorySearch.ForeColor=$text; $memorySearch.BorderStyle='None'; Round-Box $memorySearch
 $memorySearch.Font=[Drawing.Font]::new('Microsoft YaHei UI',10); $memorySearch.Text='搜索记忆...'
 $memoryList=Place $memoryCard (New-Object Windows.Forms.ListBox) 20 52 712 300
-$memoryList.BackColor=$surface2; $memoryList.ForeColor=$text; $memoryList.BorderStyle='FixedSingle'
+$memoryList.BackColor=$surface2; $memoryList.ForeColor=$text; $memoryList.BorderStyle='None'; Round-Box $memoryList
 $memoryList.Font=[Drawing.Font]::new('Microsoft YaHei UI',10)
-$addMemory=Button $memoryCard '+ 添加' 20 364 100 36 $accent
-$editMemory=Button $memoryCard '编辑' 132 364 100 36 $surface2 $text
-$deleteMemory=Button $memoryCard '删除' 244 364 100 36 $surface2 $bad
-$importMemory=Button $memoryCard '导入' 532 364 100 36 $surface2 $text
-$exportMemory=Button $memoryCard '导出' 644 364 100 36 $surface2 $text
+$addMemory=Button $memoryCard '+ 添加' 20 364 100 36 $accent $null -Rounded
+$editMemory=Button $memoryCard '编辑' 132 364 100 36 $surface2 $text -Rounded
+$deleteMemory=Button $memoryCard '删除' 244 364 100 36 $surface2 $bad -Rounded
+$importMemory=Button $memoryCard '导入' 532 364 100 36 $surface2 $text -Rounded
+$exportMemory=Button $memoryCard '导出' 644 364 100 36 $surface2 $text -Rounded
 
 # ========== 自主陪伴 ==========
 $companionPage=$content['陪伴']; $null=Label $companionPage '自主陪伴' 0 0 180 36 20 -Bold
@@ -598,7 +639,7 @@ $companionEnabled.Text='启用自主陪伴'; $companionEnabled.ForeColor=$text; 
 $null=Label $companionCard '陪伴频率（分钟）' 20 92 140 24 9 $muted
 $companionInterval=Place $companionCard (New-Object Windows.Forms.NumericUpDown) 180 90 180 28
 $companionInterval.Minimum=1; $companionInterval.Maximum=120; $companionInterval.Value=15; $companionInterval.Increment=5
-$companionInterval.BackColor=$surface2; $companionInterval.ForeColor=$text; $companionInterval.BorderStyle='FixedSingle'
+$companionInterval.BackColor=$surface2; $companionInterval.ForeColor=$text; $companionInterval.BorderStyle='None'; Round-Box $companionInterval
 
 $null=Label $companionCard '感知权限' 20 132 200 28 12 -Bold
 $cameraEnabled=Place $companionCard (New-Object Windows.Forms.CheckBox) 20 166 320 28
@@ -610,11 +651,11 @@ $null=Label $companionCard '虚拟作息' 20 240 200 28 12 -Bold
 $null=Label $companionCard '活跃时段' 20 274 100 24 9 $muted
 $scheduleStart=Place $companionCard (New-Object Windows.Forms.NumericUpDown) 130 272 80 28
 $scheduleStart.Minimum=0; $scheduleStart.Maximum=23; $scheduleStart.Value=8
-$scheduleStart.BackColor=$surface2; $scheduleStart.ForeColor=$text; $scheduleStart.BorderStyle='FixedSingle'
+$scheduleStart.BackColor=$surface2; $scheduleStart.ForeColor=$text; $scheduleStart.BorderStyle='None'; Round-Box $scheduleStart
 $null=Label $companionCard ':00 至' 220 274 50 24 9 $muted
 $scheduleEnd=Place $companionCard (New-Object Windows.Forms.NumericUpDown) 280 272 80 28
 $scheduleEnd.Minimum=0; $scheduleEnd.Maximum=23; $scheduleEnd.Value=23
-$scheduleEnd.BackColor=$surface2; $scheduleEnd.ForeColor=$text; $scheduleEnd.BorderStyle='FixedSingle'
+$scheduleEnd.BackColor=$surface2; $scheduleEnd.ForeColor=$text; $scheduleEnd.BorderStyle='None'; Round-Box $scheduleEnd
 $null=Label $companionCard ':00' 370 274 40 24 9 $muted
 
 $saveCompanion=Button $companionPage '保存陪伴配置' 0 444 160 34 $accent
@@ -639,7 +680,7 @@ $null=Label $cleanCard '旧数据清理' 20 12 200 28 13 -Bold
 $null=Label $cleanCard '清理早于（天数）' 20 56 140 24 9 $muted
 $cleanDays=Place $cleanCard (New-Object Windows.Forms.NumericUpDown) 180 54 120 28
 $cleanDays.Minimum=1; $cleanDays.Maximum=365; $cleanDays.Value=30; $cleanDays.Increment=7
-$cleanDays.BackColor=$surface2; $cleanDays.ForeColor=$text; $cleanDays.BorderStyle='FixedSingle'
+$cleanDays.BackColor=$surface2; $cleanDays.ForeColor=$text; $cleanDays.BorderStyle='None'; Round-Box $cleanDays
 $cleanButton=Button $cleanCard '执行清理' 320 54 140 28 $bad
 $cleanStatus=Label $cleanCard '等待操作...' 20 96 700 28 9 $muted
 
