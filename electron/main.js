@@ -36,6 +36,9 @@ const { createDirector } = require('./director-service')
 const { createForegroundSensor } = require('./foreground-sensor')
 const { readStaticAsset } = require('./static-assets')
 const { createPlatformSecurity, configureSandbox } = require('./platform-security')
+const { createWorld, ITEMS, GAMES, NEED_FLOOR, NEED_MAX } = require('./pet-world')
+const { createWorldMode, FRAME_MS } = require('./world-mode')
+const { createLifeState } = require('./life-state')
 
 /** QQ 网关实例（config.qq.enabled 打开后才有） */
 let qqGateway = null
@@ -419,6 +422,133 @@ if (!state.interactions || typeof state.interactions !== 'object') {
 
 function saveState() {
   writeJson(STATE_PATH, state)
+}
+
+// ---------------------------------------------------------------- 小世界模式
+// 桌宠第二形态：窗口收成一个小方块，在桌面上自己爬、自己玩。
+// 进度（金币 / 道具 / 需求）挂在 state.games.world 上，跟着 state.json 走。
+
+const world = createWorld({ saved: state.games && state.games.world, now: Date.now })
+const lifeState = createLifeState()
+
+let worldMode = null
+let worldLoopTimer = null
+let worldTickTimer = null
+let worldDragUntil = 0
+let lastWorldWalkKey = ''
+
+/** 世界模式激活中：窗口位置由漫游接管，不要再往存档里写窗口几何。 */
+function isWorldActive() {
+  return Boolean(worldMode && worldMode.status().active)
+}
+
+function worldDisplayArea() {
+  if (!mainWindow || mainWindow.isDestroyed()) return null
+  try {
+    return screenModule().getDisplayMatching(mainWindow.getBounds()).workArea
+  } catch {
+    try { return screenModule().getPrimaryDisplay().workArea } catch { return null }
+  }
+}
+
+function ensureWorldMode() {
+  if (!worldMode) {
+    worldMode = createWorldMode({
+      onEvent: (event) => {
+        // 主进程只发时机；播什么动作由渲染层按当前模型能力自己挑
+        pushToPet({ type: 'world-event', event: event.type === 'world-idle' ? 'idle' : 'arrived' })
+      },
+    })
+  }
+  return worldMode
+}
+
+/** 任何一个"用户在正经用电脑"的信号都让宠物停住脚步。 */
+function worldPaused() {
+  if (!mainWindow || mainWindow.isDestroyed()) return true
+  if (!mainWindow.isVisible()) return true
+  if (collapsed) return true
+  if (showRunning) return true
+  if (Date.now() < worldDragUntil) return true
+  for (const win of [chatWindow, panelWindow, consoleWindow, settingsWindow]) {
+    if (win && !win.isDestroyed?.() && win.isVisible?.()) return true
+  }
+  return false
+}
+
+function worldPace() {
+  try { return lifeState.state().pace } catch { return 1 }
+}
+
+function stopWorldLoop() {
+  if (worldLoopTimer) clearInterval(worldLoopTimer)
+  worldLoopTimer = null
+  lastWorldWalkKey = ''
+}
+
+function startWorldLoop() {
+  stopWorldLoop()
+  let last = Date.now()
+  worldLoopTimer = setInterval(() => {
+    if (!isWorldActive()) return stopWorldLoop()
+    const now = Date.now()
+    const dtMs = now - last
+    last = now
+    let frame
+    try {
+      frame = worldMode.frame({ now, dtMs, paused: worldPaused(), pace: worldPace() })
+    } catch (error) {
+      logLine('[world] 出帧失败:', error.message)
+      return
+    }
+    if (!frame.active) return
+    if (frame.bounds && mainWindow && !mainWindow.isDestroyed()) {
+      const box = mainWindow.getBounds()
+      if (box.x !== frame.bounds.x || box.y !== frame.bounds.y) {
+        try { mainWindow.setPosition(frame.bounds.x, frame.bounds.y) } catch { /* 窗口刚销毁 */ }
+      }
+    }
+    // 只在走路状态或朝向变化时通知渲染层，避免 30fps 刷 IPC
+    const key = frame.moving ? 'walk:' + frame.facing + ':' + (frame.speed > 90 ? 'fast' : 'slow') : 'stop'
+    if (key !== lastWorldWalkKey) {
+      lastWorldWalkKey = key
+      pushToPet({ type: 'world-walk', moving: Boolean(frame.moving), facing: frame.facing || 0, speed: frame.speed || 0 })
+    }
+  }, FRAME_MS)
+  if (worldLoopTimer.unref) worldLoopTimer.unref()
+}
+
+function persistWorld() {
+  if (!state.games || typeof state.games !== 'object') state.games = {}
+  state.games.world = world.state
+  saveState()
+}
+
+function broadcastWorld() {
+  pushToPet({ type: 'world-state', world: world.snapshot(), mood: world.moodTier() })
+}
+
+function startWorldTick() {
+  if (worldTickTimer) return
+  // 20 秒检查一次需求掉落；真正结算靠 pet-world 自己按时间算，不会漏
+  worldTickTimer = setInterval(() => {
+    try {
+      const drops = world.tick()
+      if (Object.keys(drops).length > 0) {
+        persistWorld()
+        broadcastWorld()
+        pushToPet({ type: 'world-needs', drops, mood: world.moodTier() })
+      }
+    } catch (error) {
+      logLine('[world] 需求结算失败:', error.message)
+    }
+  }, 20000)
+  if (worldTickTimer.unref) worldTickTimer.unref()
+}
+
+function stopWorldTick() {
+  if (worldTickTimer) clearInterval(worldTickTimer)
+  worldTickTimer = null
 }
 
 // ------------------------------------------------------------- characters
@@ -925,6 +1055,8 @@ function windowBounds() {
 let windowSaveTimer = null
 function rememberWindowBounds({flush = false} = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  // 世界模式下窗口位置是漫游算出来的，不该污染正常形态的窗口几何
+  if (isWorldActive()) return
   const special = mainWindow.isMaximized?.() || mainWindow.isFullScreen?.()
   const box = collapsed ? expandedBounds : special ? mainWindow.getNormalBounds() : mainWindow.getBounds()
   if (box && ['x','y','width','height'].every(key => Number.isFinite(box[key])) && box.width > 76 && box.height > 76) {
@@ -960,6 +1092,44 @@ async function runSmokeMode() {
   pushToPet({ type: 'hotkey', action: 'TriggerAnimation', file: '打招呼.motion3.json' })
   await wait(600)
   checks.push({ id: 'hotkey-dispatched', ok: true })
+
+  // 小世界模式：进得去、窗口真的会被漫游推着走、退得出且还原窗口尺寸
+  try {
+    const beforeBox = mainWindow.getBounds()
+    const entered = enterWorldMode()
+    checks.push({ id: 'world-enter', ok: entered.ok === true, code: entered.code })
+    if (entered.ok) {
+      const worldBox = mainWindow.getBounds()
+      checks.push({
+        id: 'world-shrink',
+        ok: worldBox.width === entered.size.width && worldBox.height === entered.size.height,
+        got: worldBox.width + 'x' + worldBox.height,
+        want: entered.size.width + 'x' + entered.size.height,
+      })
+      // 漫游在窗口不可见时会主动暂停（那是正确行为），这里让它可见再采样
+      try { mainWindow.showInactive() } catch { /* ignore */ }
+      const samples = []
+      for (let i = 0; i < 12; i += 1) {
+        await wait(120)
+        const box = mainWindow.getBounds()
+        samples.push(box.x + ',' + box.y)
+      }
+      const distinct = new Set(samples).size
+      checks.push({ id: 'world-moves', ok: distinct >= 2, samples: distinct })
+      const exited = exitWorldMode()
+      checks.push({ id: 'world-exit', ok: exited.ok === true })
+      const afterBox = mainWindow.getBounds()
+      checks.push({
+        id: 'world-restore',
+        ok: afterBox.width === beforeBox.width && afterBox.height === beforeBox.height,
+        got: afterBox.width + 'x' + afterBox.height,
+        want: beforeBox.width + 'x' + beforeBox.height,
+      })
+    }
+  } catch (error) {
+    checks.push({ id: 'world-mode', ok: false, error: error.message })
+  }
+
   try {
     const outDir = path.join(ROOT, 'smoke-out')
     fs.mkdirSync(outDir, { recursive: true })
@@ -2021,8 +2191,88 @@ ipcMain.handle('pet:click-through', (_event, ignore) => {
   return { ok: true, ignore: applyClickThrough(ignore) }
 })
 
+// ------------------------------------------------------------ 小世界 IPC
+function enterWorldMode() {
+  if (!mainWindow || mainWindow.isDestroyed()) return { ok: false, code: 'WINDOW_NOT_READY' }
+  if (collapsed) return { ok: false, code: 'COLLAPSED', error: '先展开再从菜单进入小世界' }
+  const area = worldDisplayArea()
+  if (!area) return { ok: false, code: 'AREA_INVALID' }
+  const mode = ensureWorldMode()
+  const result = mode.enter({ area, bounds: mainWindow.getBounds(), now: Date.now() })
+  if (!result.ok) return result
+  // 窗口自带最小尺寸，收小之前先放开
+  mainWindow.setMinimumSize(200, 220)
+  mainWindow.setBounds(result.bounds)
+  startWorldLoop()
+  startWorldTick()
+  pushToPet({ type: 'world-mode', active: true, size: result.size })
+  logLine('[world] 进入小世界模式', JSON.stringify(result.bounds))
+  return { ok: true, bounds: result.bounds, size: result.size, world: world.snapshot(), mood: world.moodTier() }
+}
+
+function exitWorldMode() {
+  if (!worldMode || !worldMode.status().active) return { ok: false, code: 'NOT_ACTIVE' }
+  stopWorldLoop()
+  const result = worldMode.exit()
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setMinimumSize(240, 320)
+    if (result.restore) mainWindow.setBounds(result.restore)
+  }
+  pushToPet({ type: 'world-mode', active: false })
+  rememberWindowBounds({ flush: true })
+  persistWorld()
+  logLine('[world] 退出小世界模式')
+  return { ok: true, restore: result.restore }
+}
+
+ipcMain.handle('pet:world-enter', () => enterWorldMode())
+ipcMain.handle('pet:world-exit', () => exitWorldMode())
+
+ipcMain.handle('pet:world-state', () => ({
+  ok: true,
+  world: world.snapshot(),
+  mood: world.moodTier(),
+  items: ITEMS,
+  games: GAMES,
+  needs: { floor: NEED_FLOOR, max: NEED_MAX },
+  mode: worldMode ? worldMode.status() : { active: false },
+}))
+
+ipcMain.handle('pet:world-buy', (_event, itemId) => {
+  const result = world.buy(itemId)
+  if (result.ok) { persistWorld(); broadcastWorld() }
+  return { ...result, world: world.snapshot() }
+})
+
+ipcMain.handle('pet:world-use', (_event, itemId) => {
+  const result = world.use(itemId)
+  if (result.ok) { persistWorld(); broadcastWorld() }
+  return { ...result, world: world.snapshot(), mood: world.moodTier() }
+})
+
+ipcMain.handle('pet:world-play', (_event, payload) => {
+  const gameId = payload && typeof payload.gameId === 'string' ? payload.gameId : ''
+  const score = payload ? payload.score : 0
+  const result = world.settleGame(gameId, score)
+  if (result.ok) { persistWorld(); broadcastWorld() }
+  return { ...result, world: world.snapshot(), mood: world.moodTier() }
+})
+
+ipcMain.handle('pet:world-pet', () => {
+  const result = world.pet()
+  if (result.ok) { persistWorld(); broadcastWorld() }
+  return { ...result, world: world.snapshot(), mood: world.moodTier() }
+})
+
 ipcMain.handle('pet:collapse', () => {
   if (!mainWindow || mainWindow.isDestroyed()) return { ok: false }
+  // 圆球模式和小世界互斥：先退世界，再收球
+  if (isWorldActive()) {
+    stopWorldLoop()
+    const back = worldMode.exit()
+    if (back.restore) { try { mainWindow.setBounds(back.restore) } catch { /* ignore */ } }
+    pushToPet({ type: 'world-mode', active: false })
+  }
   const box = mainWindow.getBounds()
   if (!collapsed) expandedBounds = { ...box }
   collapsed = true
@@ -2138,6 +2388,7 @@ ipcMain.on('pet:move-to', (_event, pos) => {
     Math.min(Math.max(area.x - halfW, Math.round(x)), area.x + area.width - halfW),
     Math.min(Math.max(area.y - anchorY, Math.round(y)), area.y + area.height - anchorY),
   )
+  syncWorldAfterDrag()
 })
 ipcMain.on('pet:move-by', (_event, delta) => {
   if (!mainWindow || mainWindow.isDestroyed()) return
@@ -2157,7 +2408,18 @@ ipcMain.on('pet:move-by', (_event, delta) => {
     Math.min(Math.max(minX, nextX), maxX),
     Math.min(Math.max(minY, nextY), maxY),
   )
+  syncWorldAfterDrag()
 })
+
+/** 用户在拖窗口：世界模式立刻让路，并把漫游的当前位置对齐过去。 */
+function syncWorldAfterDrag() {
+  if (!isWorldActive()) return
+  worldDragUntil = Date.now() + 1200
+  try {
+    const box = mainWindow.getBounds()
+    worldMode.syncPosition({ x: box.x, y: box.y })
+  } catch { /* 窗口刚销毁 */ }
+}
 
 // C2：点击 / 互动上报（渲染层调用）
 // ---------------------------------------------------------- C4：开机自启
@@ -2363,6 +2625,9 @@ if (!singleInstance) {
   app.on('before-quit', () => { stopCamera(); director.shutdown(); rememberWindowBounds({flush:true}) })
   app.on('will-quit', () => {
     keyboardSensor.stop()
+    stopWorldLoop()
+    stopWorldTick()
+    try { persistWorld() } catch { /* 存档失败不阻塞退出 */ }
     if (windowSaveTimer) clearTimeout(windowSaveTimer)
     if (watchTimer) clearInterval(watchTimer)
     if (cursorTimer) clearInterval(cursorTimer)

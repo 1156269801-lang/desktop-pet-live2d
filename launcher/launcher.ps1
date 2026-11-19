@@ -33,6 +33,19 @@ switch ($Theme) {
 # 向后兼容别名
 $white = $text; $green = $ok; $yellow = $warn; $red = $bad
 $card = $surface; $cardHover = $surface2; $accentDown = $accentLo; $logBg = $bg
+# ---- Win11 圆角 / Mica（DWM）----
+if (-not ('PetDwm' -as [type])) {
+    Add-Type -TypeDefinition 'using System;
+using System.Runtime.InteropServices;
+public class PetDwm {
+    [DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr h, int a, ref int v, int s);
+    [DllImport("dwmapi.dll")] public static extern int DwmExtendFrameIntoClientArea(IntPtr h, ref M m);
+    [StructLayout(LayoutKind.Sequential)] public struct M { public int l, r, t, b; }
+    public static int Round(IntPtr h) { int v = 2; return DwmSetWindowAttribute(h, 33, ref v, 4); }
+    public static int Backdrop(IntPtr h, int kind) { int v = kind; int hr = DwmSetWindowAttribute(h, 38, ref v, 4);
+        var m = new M { l = -1, r = -1, t = -1, b = -1 }; DwmExtendFrameIntoClientArea(h, ref m); return hr; }
+}' -ErrorAction SilentlyContinue
+}
 $form = New-Object Windows.Forms.Form
 $form.Text = '大肥鱼桌宠 · 启动器'
 $form.Size = New-Object Drawing.Size(980,620)
@@ -43,6 +56,9 @@ $form.Font = New-Object Drawing.Font('Microsoft YaHei UI',10)
 $iconPath = Join-Path $PSScriptRoot 'launcher.ico'
 if (Test-Path -LiteralPath $iconPath) { $form.Icon = New-Object Drawing.Icon($iconPath) }
 
+$form.Add_HandleCreated({
+    try { [void][PetDwm]::Round($form.Handle) } catch { }
+})
 function Set-Round($Panel,[int]$Corner=12) {
     if ($Panel.Width -lt 24 -or $Panel.Height -lt 24) { return }
     $shape = New-Object Drawing.Drawing2D.GraphicsPath; $radius = $Corner*2
@@ -57,6 +73,33 @@ function Set-Round($Panel,[int]$Corner=12) {
     } finally { $shape.Dispose() }
 }
 
+function Dot($Parent,[int]$X,[int]$Y,[int]$W,[int]$H) {
+    $pic = New-Object Windows.Forms.PictureBox
+    $pic.SizeMode = 'Zoom'; $pic.BackColor = [Drawing.Color]::Transparent
+    [void](Place $Parent $pic $X $Y $W $H)
+    Set-Dot $pic 'idle'
+    return $pic
+}
+function Set-Dot($Pic,$State) {
+    # 兼容传颜色进来：映射成状态名
+    if ($State -is [Drawing.Color]) {
+        $name = 'idle'
+        if ($State -eq $ok) { $name = 'ok' }
+        elseif ($State -eq $warn) { $name = 'warn' }
+        elseif ($State -eq $bad) { $name = 'bad' }
+        $State = $name
+    }
+    if (-not $State) { $State = 'idle' }
+    $path = Join-Path $PSScriptRoot ("ui\dot-" + $State + ".png")
+    if (-not (Test-Path -LiteralPath $path)) { return }
+    try {
+        $bytes = [System.IO.File]::ReadAllBytes($path)
+        $ms = New-Object System.IO.MemoryStream(,$bytes)
+        $img = [Drawing.Image]::FromStream($ms)
+        $old = $Pic.Image; $Pic.Image = $img
+        if ($old) { $old.Dispose() }
+    } catch { }
+}
 function Place($Parent,$Control,[int]$X,[int]$Y,[int]$W,[int]$H) {
     $Control.SetBounds($X,$Y,$W,$H)
     $Parent.Controls.Add($Control)
@@ -104,33 +147,27 @@ function Logo($Parent,[int]$Left,[int]$Top,[int]$Size) {
     $logo=Place $Parent (New-Object Windows.Forms.PictureBox) $Left $Top $Size $Size
     $logo.SizeMode='Zoom'; $logo.BackColor=$surface
     Set-Round $logo
-    # 尝试加载鲸鱼娘角色图标
-    $iconPath = Join-Path $Root 'app\characters\DeepSeek免费公皮\icon.png'
-    if (Test-Path -LiteralPath $iconPath) {
-        try {
-            $logo.Image = [Drawing.Image]::FromFile($iconPath)
-        } catch {
-            # 降级：绘制简单的鲸鱼 emoji 样式
-            $logo.Add_Paint({param($sender,$eventArgs)
-                $graphics=$eventArgs.Graphics; $graphics.SmoothingMode='AntiAlias'; $graphics.TextRenderingHint='AntiAlias'
-                $whale = ''
-                $font = [Drawing.Font]::new('Segoe UI Emoji', [float]($sender.Width * 0.6), [Drawing.FontStyle]::Regular)
-                $brush = [Drawing.SolidBrush]::new($accent)
-                try {
-                    $format = [Drawing.StringFormat]::new(); $format.Alignment = 'Center'; $format.LineAlignment = 'Center'
-                    $graphics.DrawString($whale, $font, $brush, [Drawing.RectangleF]::new(0, 0, $sender.Width, $sender.Height), $format)
-                } finally { $font.Dispose(); $brush.Dispose() }
-            })
+    # 优先 ui/logo-{Size}.png（与 launcher.ico 同源，按档位预渲染）
+    $uiLogo = Join-Path $PSScriptRoot ("ui\logo-" + $Size + ".png")
+    if (-not (Test-Path -LiteralPath $uiLogo)) { $uiLogo = Join-Path $PSScriptRoot 'ui\logo-128.png' }
+    $loaded = $false
+    if (Test-Path -LiteralPath $uiLogo) {
+        try { $logo.Image = [Drawing.Image]::FromFile($uiLogo); $loaded = $true } catch { }
+    }
+    if (-not $loaded) {
+        # 兜底：角色目录里的 icon.png
+        $iconPath = Join-Path $Root 'app\characters\DeepSeek免费公皮\icon.png'
+        if (Test-Path -LiteralPath $iconPath) {
+            try { $logo.Image = [Drawing.Image]::FromFile($iconPath); $loaded = $true } catch { }
         }
-    } else {
-        # 备用：绘制渐变圆形
+    }
+    if (-not $loaded) {
+        # 最后兜底：渐变圆，不再用 emoji（WinForms 里会变豆腐块）
         $logo.Add_Paint({param($sender,$eventArgs)
             $graphics=$eventArgs.Graphics; $graphics.SmoothingMode='AntiAlias'
             $rect = [Drawing.Rectangle]::new(4, 4, $sender.Width - 8, $sender.Height - 8)
-            $brush = [Drawing.Drawing2D.LinearGradientBrush]::new($rect, $accent, $hover, 45)
-            try {
-                $graphics.FillEllipse($brush, $rect)
-            } finally { $brush.Dispose() }
+            $brush = [Drawing.Drawing2D.LinearGradientBrush]::new($rect, $accent, $accentHi, 45)
+            try { $graphics.FillEllipse($brush, $rect) } finally { $brush.Dispose() }
         })
     }
     return $logo
@@ -178,9 +215,9 @@ function Card($Parent,[int]$X,[int]$Y,[int]$W,[int]$H) {
 $titlebar = Place $form (New-Object Windows.Forms.Panel) 1 1 978 64
 $titlebar.BackColor = $sidebar
 $version = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'version.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-$heading = Label $titlebar "大肥鱼桌宠 v$($version.app)" 20 8 380 47 18 $sidebarTx
-$buildLabel = Label $titlebar "启动器 v$($version.launcher)" 346 16 165 32 10 $sidebarMu
-$runtimeLabel = Label $titlebar '● 运行时检测中' 524 16 185 32 10 $sidebarMu
+$heading = Label $titlebar "大肥鱼桌宠 v$($version.app)" 20 8 300 47 18 $sidebarTx
+$buildLabel = Label $titlebar ("Launcher v" + $version.launcher) 340 16 150 32 10 $sidebarMu
+$runtimeLabel = Label $titlebar '● 运行时检测中' 504 16 200 32 10 $sidebarMu
 $minimize = Button $titlebar '—' 880 8 40 42 $sidebar
 $minimize.ForeColor = $sidebarTx; $minimize.Font = [Drawing.Font]::new('Microsoft YaHei UI', 14, [Drawing.FontStyle]::Bold)
 $close = Button $titlebar '×' 928 8 40 42 $sidebar
@@ -210,7 +247,7 @@ $grip.Add_MouseMove({if($script:ResizeFrom){$point=[Windows.Forms.Cursor]::Posit
 $grip.Add_MouseUp({$script:ResizeFrom = $null})
 
 $pages=@{}; $navButtons=@{}; $content=@{}; $index=0
-foreach ($name in @('启动','服务','设置','日志','关于')) {
+foreach ($name in @('启动','服务','设置','高级','记忆','陪伴','维护','日志','关于')) {
     $panel = New-Object Windows.Forms.Panel; $panel.Dock = 'Fill'; $panel.Visible = $false
     $body.Controls.Add($panel); $pages[$name] = $panel
     $content[$name]=Place $panel (New-Object Windows.Forms.Panel) 24 20 752 500
@@ -232,7 +269,36 @@ function Show-Page([string]$Name) {
     }
     $pages[$Name].BringToFront(); $script:PageName = $Name
     if ($Name -eq '日志') { Act { Refresh-Logs } }
+    if ($Name -eq '服务') { Act { Refresh-ServiceLogs } }
     if ($Name -eq '启动') { Act { Refresh-Recent } }
+}
+
+$script:ServiceLogBuffer = New-Object 'System.Collections.Generic.Queue[string]'
+function Refresh-ServiceLogs {
+    $filter = [string]$serviceLogFilter.SelectedItem
+    $logNames = @{
+        '全部' = @('*.log')
+        'TTS' = @('tts*.log','gpt-sovits*.log')
+        'ASR' = @('asr*.log','sensevoice*.log')
+        '桌宠' = @('electron*.log','pet*.log','main*.log')
+    }
+    $patterns = if ($logNames.ContainsKey($filter)) { $logNames[$filter] } else { @('*.log') }
+
+    $allLines = @()
+    foreach ($pattern in $patterns) {
+        $files = Get-ChildItem -LiteralPath $LogDir -Filter $pattern -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 3
+        foreach ($file in $files) {
+            $lines = Get-Content -LiteralPath $file.FullName -Tail 10 -Encoding UTF8 -ErrorAction SilentlyContinue
+            foreach ($line in $lines) {
+                if ($line.Trim()) { $allLines += $line }
+            }
+        }
+    }
+
+    $recent = $allLines | Select-Object -Last 5
+    for ($i = 0; $i -lt 5; $i++) {
+        $serviceLogLines[$i].Text = if ($i -lt $recent.Count) { $recent[$i] } else { '' }
+    }
 }
 
 $launchPage=$content['启动']
@@ -250,7 +316,7 @@ foreach($key in 'TTS','ASR','Pet') {
     $tile=Card $launchPage 0 196 224 104
     $bar=Place $tile (New-Object Windows.Forms.Panel) 0 16 4 72
     $bar.BackColor=$accent; $bar.Visible=$false
-    $dot=Label $tile '●' 20 18 20 24 11 $faint
+    $dot=Dot $tile 20 18 20 24
     $null=Label $tile $shortNames[$key] 44 16 160 30 13 -Bold
     $portLabel=Label $tile '' 20 50 180 20 9 $muted
     $stateLabel=Label $tile '等待检测' 20 72 180 22 9 $muted
@@ -286,22 +352,59 @@ $stopAll.Add_Click({ Act {
     Report ($messages -join '　') -Failed:$failed; Refresh-Status
 } })
 
-$servicePage=$content['服务']; $null=Label $servicePage '服务' 0 0 180 36 20 -Bold
+$servicePage=$content['服务']; $null=Label $servicePage '服务管理' 0 0 200 36 20 -Bold
+$serviceHelp=Label $servicePage '一键启动/停止 ASR、TTS 和桌宠进程' 210 8 450 24 9 $muted
 $serviceLabels=@{}; $servicePorts=@{}; $serviceCards=@{}; $serviceButtons=@{}
 $serviceNames=@{TTS='TTS · GPT-SoVITS'; ASR='ASR · SenseVoice'; Pet='桌宠 · Electron'}
 $index=0
 foreach($key in 'TTS','ASR','Pet') {
-    $panel=Card $servicePage 0 (52+$index*118) 752 102; $serviceCards[$key]=$panel
-    $null=Label $panel $serviceNames[$key] 20 12 330 28 14 -Bold
-    $servicePorts[$key]=Label $panel '' 20 43 330 20 9 $muted
-    $serviceLabels[$key]=Label $panel '● 等待检测' 20 65 330 22 10 $muted
-    $start=Button $panel '启动' 0 18 100 30 $surface2 $accent
-    $stop=Button $panel '停止' 0 54 100 30 $surface2 $bad
-    $start.Tag.Key=$stop.Tag.Key=$key
-    $start.Add_Click({param($sender,$eventArgs) Act { Report (Start-Component $sender.Tag.Key); Refresh-Status }})
-    $stop.Add_Click({param($sender,$eventArgs) Act { Report (Stop-Component $sender.Tag.Key); Refresh-Status }})
-    $serviceButtons[$key]=@($start,$stop); $index++
+    $panel=Card $servicePage 0 (52+$index*130) 752 110; $serviceCards[$key]=$panel
+    $statusDot=Dot $panel 20 20 24 28
+    $null=Label $panel $serviceNames[$key] 50 18 330 28 13 -Bold
+    $servicePorts[$key]=Label $panel '' 50 48 330 20 9 $muted
+    $serviceLabels[$key]=Label $panel '等待检测' 50 70 330 22 10 $muted
+    $start=Button $panel '启动' 0 20 88 32 $accent $null -Rounded
+    $stop=Button $panel '停止' 0 58 88 32 $surface2 $bad -Rounded
+    $config=Button $panel '配置' 0 20 88 32 $surface2 $border -Rounded
+    $start.Tag.Key=$key; $start.Tag.Dot=$statusDot
+    $stop.Tag.Key=$key; $stop.Tag.Dot=$statusDot
+    $config.Tag.Key=$key
+    $start.Add_Click({param($sender,$eventArgs) Act {
+        Report (Start-Component $sender.Tag.Key); Refresh-Status
+        Set-Dot $sender.Tag.Dot $ok
+    }})
+    $stop.Add_Click({param($sender,$eventArgs) Act {
+        Report (Stop-Component $sender.Tag.Key); Refresh-Status
+        Set-Dot $sender.Tag.Dot $faint
+    }})
+    $config.Add_Click({param($sender,$eventArgs) Act {
+        $key=$sender.Tag.Key
+        $configFiles=@{
+            TTS="$WorkDir\gpt-sovits\GPT_SoVITS\configs\tts_infer.yaml"
+            ASR="$WorkDir\sensevoice\funasr\runtime\python\onnx\server_config.yaml"
+            Pet="$WorkDir\pet\config.json"
+        }
+        if($configFiles.ContainsKey($key) -and (Test-Path $configFiles[$key])){
+            Start-Process notepad.exe $configFiles[$key]
+        }else{
+            Report "暂无 $key 配置文件"
+        }
+    }})
+    $serviceButtons[$key]=@{Start=$start;Stop=$stop;Config=$config;Dot=$statusDot}; $index++
 }
+
+$serviceLogCard=Card $servicePage 0 444 752 120
+$null=Label $serviceLogCard '实时日志' 20 12 140 28 11 -Bold
+$serviceLogFilter=Place $serviceLogCard (New-Object Windows.Forms.ComboBox) 170 10 140 30
+$serviceLogFilter.DropDownStyle='DropDownList'; $serviceLogFilter.ForeColor=$text; $serviceLogFilter.FlatStyle='Flat'
+$serviceLogFilter.Items.AddRange(@('全部','TTS','ASR','桌宠'))
+$serviceLogFilter.SelectedIndex=0
+Feedback $serviceLogFilter $surface2 $border $surface
+$serviceLogLines=@(0..4 | ForEach-Object {
+    $line=Label $serviceLogCard '' 20 (48+$_*14) 710 14 8 $muted
+    $line.Font=[Drawing.Font]::new('Consolas',8)
+    $line
+})
 
 $settingsPage=$content['设置']; $null=Label $settingsPage '设置' 0 0 180 36 20 -Bold
 $settingsCard=Card $settingsPage 0 48 752 310
@@ -416,6 +519,161 @@ $refresh.Add_Click({Act {$script:LogStamp=$null; Refresh-Logs}})
 $autoScroll.Add_CheckedChanged({if($autoScroll.Checked){Act {Refresh-Logs; $logs.SelectionStart=$logs.TextLength; $logs.ScrollToCaret()}}})
 $logPicker.Add_SelectedIndexChanged({if(!$script:UpdatingLogs){Act {Refresh-Logs}}})
 
+# ========== 高级配置 ==========
+$advancedPage=$content['高级']; $null=Label $advancedPage '高级配置' 0 0 180 36 20 -Bold
+$personaCard=Card $advancedPage 0 48 752 200
+$null=Label $personaCard '统一人设' 20 12 140 28 13 -Bold
+$personaText=Place $personaCard (New-Object Windows.Forms.TextBox) 20 48 712 130
+$personaText.Multiline=$true; $personaText.ScrollBars='Vertical'; $personaText.Font=[Drawing.Font]::new('Microsoft YaHei UI',10)
+$personaText.BackColor=$surface2; $personaText.ForeColor=$text; $personaText.BorderStyle='FixedSingle'
+
+$budgetCard=Card $advancedPage 0 264 364 124
+$null=Label $budgetCard '上下文预算' 20 12 200 28 13 -Bold
+$null=Label $budgetCard '输入令牌上限' 20 52 120 24 9 $muted
+$budgetInput=Place $budgetCard (New-Object Windows.Forms.NumericUpDown) 150 50 180 28
+$budgetInput.Minimum=1000; $budgetInput.Maximum=200000; $budgetInput.Value=32000; $budgetInput.Increment=1000
+$budgetInput.BackColor=$surface2; $budgetInput.ForeColor=$text; $budgetInput.BorderStyle='FixedSingle'
+$null=Label $budgetCard '输出令牌上限' 20 86 120 24 9 $muted
+$budgetOutput=Place $budgetCard (New-Object Windows.Forms.NumericUpDown) 150 84 180 28
+$budgetOutput.Minimum=500; $budgetOutput.Maximum=16000; $budgetOutput.Value=8000; $budgetOutput.Increment=500
+$budgetOutput.BackColor=$surface2; $budgetOutput.ForeColor=$text; $budgetOutput.BorderStyle='FixedSingle'
+
+$shareCard=Card $advancedPage 388 264 364 124
+$null=Label $shareCard '限时共享' 20 12 200 28 13 -Bold
+$shareEnabled=Place $shareCard (New-Object Windows.Forms.CheckBox) 20 52 320 28
+$shareEnabled.Text='启用限时共享链接'; $shareEnabled.ForeColor=$text; $shareEnabled.Font=[Drawing.Font]::new('Microsoft YaHei UI',10)
+$null=Label $shareCard '有效期（分钟）' 20 86 120 24 9 $muted
+$shareDuration=Place $shareCard (New-Object Windows.Forms.NumericUpDown) 150 84 180 28
+$shareDuration.Minimum=5; $shareDuration.Maximum=1440; $shareDuration.Value=30; $shareDuration.Increment=5
+$shareDuration.BackColor=$surface2; $shareDuration.ForeColor=$text; $shareDuration.BorderStyle='FixedSingle'
+
+$diagCard=Card $advancedPage 0 404 752 80
+$null=Label $diagCard '控制 API 诊断' 20 12 200 28 13 -Bold
+$diagButton=Button $diagCard '运行诊断' 20 48 140 28 $accent
+$diagResult=Label $diagCard '等待诊断...' 180 48 540 28 9 $muted
+
+$saveAdvanced=Button $advancedPage '保存高级配置' 0 500 160 34 $accent
+$saveAdvanced.Add_Click({Act {
+    $config=Read-Config
+    $config.persona=$personaText.Text
+    $config.budget=@{input=[int]$budgetInput.Value;output=[int]$budgetOutput.Value}
+    $config.share=@{enabled=$shareEnabled.Checked;duration=[int]$shareDuration.Value}
+    $json=$config|ConvertTo-Json -Depth 10 -Compress
+    [IO.File]::WriteAllText($ConfigFile,$json,[Text.Encoding]::UTF8)
+    Report '高级配置已保存'
+}})
+
+# ========== 记忆管理 ==========
+$memoryPage=$content['记忆']; $null=Label $memoryPage '记忆管理' 0 0 180 36 20 -Bold
+$memoryCard=Card $memoryPage 0 48 752 420
+$null=Label $memoryCard '显式记忆库' 20 12 200 28 13 -Bold
+$memorySearch=Place $memoryCard (New-Object Windows.Forms.TextBox) 240 12 360 28
+$memorySearch.BackColor=$surface2; $memorySearch.ForeColor=$text; $memorySearch.BorderStyle='FixedSingle'
+$memorySearch.Font=[Drawing.Font]::new('Microsoft YaHei UI',10); $memorySearch.Text='搜索记忆...'
+$memoryList=Place $memoryCard (New-Object Windows.Forms.ListBox) 20 52 712 300
+$memoryList.BackColor=$surface2; $memoryList.ForeColor=$text; $memoryList.BorderStyle='FixedSingle'
+$memoryList.Font=[Drawing.Font]::new('Microsoft YaHei UI',10)
+$addMemory=Button $memoryCard '+ 添加' 20 364 100 36 $accent
+$editMemory=Button $memoryCard '编辑' 132 364 100 36 $surface2 $text
+$deleteMemory=Button $memoryCard '删除' 244 364 100 36 $surface2 $bad
+$importMemory=Button $memoryCard '导入' 532 364 100 36 $surface2 $text
+$exportMemory=Button $memoryCard '导出' 644 364 100 36 $surface2 $text
+
+# ========== 自主陪伴 ==========
+$companionPage=$content['陪伴']; $null=Label $companionPage '自主陪伴' 0 0 180 36 20 -Bold
+$companionCard=Card $companionPage 0 48 752 380
+$null=Label $companionCard '运行配置' 20 12 200 28 13 -Bold
+$companionEnabled=Place $companionCard (New-Object Windows.Forms.CheckBox) 20 52 320 28
+$companionEnabled.Text='启用自主陪伴'; $companionEnabled.ForeColor=$text; $companionEnabled.Font=[Drawing.Font]::new('Microsoft YaHei UI',11,[Drawing.FontStyle]::Bold)
+$null=Label $companionCard '陪伴频率（分钟）' 20 92 140 24 9 $muted
+$companionInterval=Place $companionCard (New-Object Windows.Forms.NumericUpDown) 180 90 180 28
+$companionInterval.Minimum=1; $companionInterval.Maximum=120; $companionInterval.Value=15; $companionInterval.Increment=5
+$companionInterval.BackColor=$surface2; $companionInterval.ForeColor=$text; $companionInterval.BorderStyle='FixedSingle'
+
+$null=Label $companionCard '感知权限' 20 132 200 28 12 -Bold
+$cameraEnabled=Place $companionCard (New-Object Windows.Forms.CheckBox) 20 166 320 28
+$cameraEnabled.Text='允许摄像头感知'; $cameraEnabled.ForeColor=$text; $cameraEnabled.Font=[Drawing.Font]::new('Microsoft YaHei UI',10)
+$screenshotEnabled=Place $companionCard (New-Object Windows.Forms.CheckBox) 20 200 320 28
+$screenshotEnabled.Text='允许截屏感知'; $screenshotEnabled.ForeColor=$text; $screenshotEnabled.Font=[Drawing.Font]::new('Microsoft YaHei UI',10)
+
+$null=Label $companionCard '虚拟作息' 20 240 200 28 12 -Bold
+$null=Label $companionCard '活跃时段' 20 274 100 24 9 $muted
+$scheduleStart=Place $companionCard (New-Object Windows.Forms.NumericUpDown) 130 272 80 28
+$scheduleStart.Minimum=0; $scheduleStart.Maximum=23; $scheduleStart.Value=8
+$scheduleStart.BackColor=$surface2; $scheduleStart.ForeColor=$text; $scheduleStart.BorderStyle='FixedSingle'
+$null=Label $companionCard ':00 至' 220 274 50 24 9 $muted
+$scheduleEnd=Place $companionCard (New-Object Windows.Forms.NumericUpDown) 280 272 80 28
+$scheduleEnd.Minimum=0; $scheduleEnd.Maximum=23; $scheduleEnd.Value=23
+$scheduleEnd.BackColor=$surface2; $scheduleEnd.ForeColor=$text; $scheduleEnd.BorderStyle='FixedSingle'
+$null=Label $companionCard ':00' 370 274 40 24 9 $muted
+
+$saveCompanion=Button $companionPage '保存陪伴配置' 0 444 160 34 $accent
+$saveCompanion.Add_Click({Act {
+    $config=Read-Config
+    $config.companion=@{
+        enabled=$companionEnabled.Checked
+        interval=[int]$companionInterval.Value
+        camera=$cameraEnabled.Checked
+        screenshot=$screenshotEnabled.Checked
+        schedule=@{start=[int]$scheduleStart.Value;end=[int]$scheduleEnd.Value}
+    }
+    $json=$config|ConvertTo-Json -Depth 10 -Compress
+    [IO.File]::WriteAllText($ConfigFile,$json,[Text.Encoding]::UTF8)
+    Report '陪伴配置已保存'
+}})
+
+# ========== 系统维护 ==========
+$maintPage=$content['维护']; $null=Label $maintPage '系统维护' 0 0 180 36 20 -Bold
+$cleanCard=Card $maintPage 0 48 752 140
+$null=Label $cleanCard '旧数据清理' 20 12 200 28 13 -Bold
+$null=Label $cleanCard '清理早于（天数）' 20 56 140 24 9 $muted
+$cleanDays=Place $cleanCard (New-Object Windows.Forms.NumericUpDown) 180 54 120 28
+$cleanDays.Minimum=1; $cleanDays.Maximum=365; $cleanDays.Value=30; $cleanDays.Increment=7
+$cleanDays.BackColor=$surface2; $cleanDays.ForeColor=$text; $cleanDays.BorderStyle='FixedSingle'
+$cleanButton=Button $cleanCard '执行清理' 320 54 140 28 $bad
+$cleanStatus=Label $cleanCard '等待操作...' 20 96 700 28 9 $muted
+
+$backupCard=Card $maintPage 0 204 364 140
+$null=Label $backupCard '配置备份' 20 12 200 28 13 -Bold
+$backupButton=Button $backupCard '备份配置' 20 56 140 28 $accent
+$restoreButton=Button $backupCard '恢复配置' 180 56 140 28 $surface2 $text
+$backupStatus=Label $backupCard '无操作' 20 96 310 28 9 $muted
+
+$archiveCard=Card $maintPage 388 204 364 140
+$null=Label $archiveCard '日志归档' 20 12 200 28 13 -Bold
+$archiveButton=Button $archiveCard '归档日志' 20 56 140 28 $accent
+$archiveStatus=Label $archiveCard '无操作' 20 96 310 28 9 $muted
+
+$cleanButton.Add_Click({Act {
+    $days=[int]$cleanDays.Value
+    $cutoff=(Get-Date).AddDays(-$days)
+    $removed=0
+    Get-ChildItem -LiteralPath $LogDir -File -Recurse -ErrorAction SilentlyContinue | Where-Object {$_.LastWriteTime -lt $cutoff} | ForEach-Object {Remove-Item -LiteralPath $_.FullName -Force; $removed++}
+    $cleanStatus.Text="已清理 $removed 个文件"; Report "清理完成：$removed 个文件"
+}})
+
+$backupButton.Add_Click({Act {
+    $timestamp=Get-Date -Format 'yyyyMMdd-HHmmss'
+    $backupPath="$Root\config-backup-$timestamp.json"
+    Copy-Item -LiteralPath $ConfigFile -Destination $backupPath
+    $backupStatus.Text="已备份至 $timestamp"; Report "配置已备份"
+}})
+
+$restoreButton.Add_Click({Act {
+    $backups=Get-ChildItem -LiteralPath $Root -Filter 'config-backup-*.json' | Sort-Object LastWriteTime -Descending
+    if($backups.Count -eq 0){throw '无备份可恢复'}
+    Copy-Item -LiteralPath $backups[0].FullName -Destination $ConfigFile -Force
+    $backupStatus.Text="已恢复 $($backups[0].Name)"; Report "配置已恢复"; Load-Settings
+}})
+
+$archiveButton.Add_Click({Act {
+    $timestamp=Get-Date -Format 'yyyyMMdd-HHmmss'
+    $archivePath="$LogDir\archive-$timestamp"
+    New-Item -ItemType Directory -Path $archivePath -Force | Out-Null
+    Get-ChildItem -LiteralPath $LogDir -File -Filter '*.log' | ForEach-Object {Move-Item -LiteralPath $_.FullName -Destination $archivePath}
+    $archiveStatus.Text="已归档至 $timestamp"; Report "日志已归档"
+}})
+
 $aboutPage=$content['关于']; $about=Card $aboutPage 0 0 752 388
 $null=Label $about ' 关于' 20 10 150 36 20 -Bold
 $aboutLogo=Logo $about 0 24 80
@@ -464,8 +722,13 @@ function Layout-Launcher {
     foreach($entry in $recentLines){$entry.Width=$contentWidth-40}
     foreach($key in 'TTS','ASR','Pet') {
         $serviceCards[$key].Width=$contentWidth
-        foreach($button in $serviceButtons[$key]){$button.Left=$contentWidth-120}
+        $serviceButtons[$key].Start.Left=$contentWidth-$serviceButtons[$key].Start.Width-16
+        $serviceButtons[$key].Stop.Left=$contentWidth-$serviceButtons[$key].Stop.Width-16-$serviceButtons[$key].Start.Width-12
+        $serviceButtons[$key].Config.Left=$contentWidth-$serviceButtons[$key].Config.Width-16-$serviceButtons[$key].Start.Width-12-$serviceButtons[$key].Stop.Width-12
     }
+    $serviceLogCard.Width=$contentWidth
+    $serviceLogFilter.Left=170; $serviceLogFilter.Width=[Math]::Min(140,$contentWidth-190)
+    foreach($line in $serviceLogLines){$line.Width=$contentWidth-40}
     $settingsCard.Width=$contentWidth; $voiceInfo.Width=$contentWidth-40
     foreach($rule in $settingsRules){$rule.Width=$contentWidth-40}
     foreach($key in $settingsInputs.Keys) {
@@ -514,17 +777,24 @@ function Refresh-Status {
             if ($exitCode -ne 0 -or ($key -ne 'ASR' -and !$owned.ContainsKey($key))) { Report "$key 进程已退出（退出码 $exitCode），详情见日志。" -Failed }
             $script:Started.Remove($key)
         }
-        $serviceLabels[$key].Text="● $state"; $serviceLabels[$key].ForeColor=$ink
+        $serviceLabels[$key].Text=$state; $serviceLabels[$key].ForeColor=$ink
         $servicePorts[$key].Text="端口 $($ports[$key])"
-        $serviceButtons[$key][0].Enabled=$files[$key] -and !$owned.ContainsKey($key) -and !$launchingAsr
-        $serviceButtons[$key][1].Enabled=$owned.ContainsKey($key)
-        $quick[$key].Dot.ForeColor=$ink; $quick[$key].Port.Text="端口 $($ports[$key])"
+        if ($serviceButtons.ContainsKey($key) -and $serviceButtons[$key].Start) {
+            $serviceButtons[$key].Start.Enabled=$files[$key] -and !$owned.ContainsKey($key) -and !$launchingAsr
+            $serviceButtons[$key].Stop.Enabled=$owned.ContainsKey($key)
+            Set-Dot $serviceButtons[$key].Dot $ink
+        }
+        Set-Dot $quick[$key].Dot $ink; $quick[$key].Port.Text="端口 $($ports[$key])"
         $quick[$key].State.Text=$state; $quick[$key].State.ForeColor=$ink
         $quick[$key].Bar.Visible=$ink -eq $ok
     }
 }
 $timer = New-Object Windows.Forms.Timer; $timer.Interval=2400
-$timer.Add_Tick({ Act { Refresh-Status; if ($script:PageName -eq '日志' -and $autoScroll.Checked) { Refresh-Logs } } })
+$timer.Add_Tick({ Act {
+    Refresh-Status
+    if ($script:PageName -eq '日志' -and $autoScroll.Checked) { Refresh-Logs }
+    if ($script:PageName -eq '服务') { Refresh-ServiceLogs }
+} })
 $form.Add_Shown({
     Set-Round $form 12  # 主窗体圆角
     $form.WindowState = 'Normal'; $form.ShowInTaskbar = $true; $form.Activate()

@@ -1,4 +1,4 @@
-﻿{
+{
     "name":  "dsh-desktop-pet",
     "version":  "1.1.1",
     "private":  false,
@@ -8,7 +8,7 @@
                     "start":  "electron .",
                     "dist":  "electron-builder --win nsis",
                     "dist:dir":  "electron-builder --win --dir",
-                    "test":  "node engine/test/choreo.test.js \u0026\u0026 node engine/test/lip-sync.test.js \u0026\u0026 node engine/test/liveliness.test.js \u0026\u0026 node engine/test/acting.test.js \u0026\u0026 node engine/test/streamer.test.js \u0026\u0026 node engine/test/provider.test.js \u0026\u0026 node --test engine/test/character-import.test.js engine/test/keyboard-reaction.test.js engine/test/camera-sensor.test.js"
+                    "test":  "node engine/test/choreo.test.js && node engine/test/lip-sync.test.js && node engine/test/liveliness.test.js && node engine/test/acting.test.js && node engine/test/streamer.test.js && node engine/test/provider.test.js && node --test engine/test/character-import.test.js engine/test/keyboard-reaction.test.js engine/test/camera-sensor.test.js && node engine/test/pet-world.test.js && node engine/test/roamer.test.js && node engine/test/world-mode.test.js"
                 },
     "dependencies":  {
                          "ws":  "^8.18.0"
