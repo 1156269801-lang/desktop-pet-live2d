@@ -1,13 +1,27 @@
-# 更新说明
+﻿# 更新说明
 
-## v1.1.0 工作区增强（未发布）
+## v1.1.1（当前）
 
-- 修复启动崩溃：`electron/main.js` 在 `const electron = require('electron')` 声明之前读取 `electron.app.isPackaged`（TDZ），导致主进程加载即抛 `ReferenceError: Cannot access 'electron' before initialization`。源码版表现为弹出 Error 窗口，打包版表现为静默闪退（退出码 `0x80000003`）。现已在计算 `ROOT` 之前引入 electron 命名空间。
-- Windows：新增 NSIS 安装包构建；安装版使用独立用户数据目录，不携带本地模型、语音、配置或密钥。
-- 角色：主窗和设置窗支持拖入 Live2D 模型文件夹或 ZIP，导入后刷新列表并切换角色。
-- 表演：按键强度驱动轻敲、抬头与手忙脚乱，支持关闭和调整灵敏度，不记录按键内容。
-- 陪伴：新增默认关闭的摄像头视觉；启用后，本机检测到有人、离开或返回时显示对应气泡，不保存画面、不上传。
+### 新增
 
+- **键盘响应**：按敲击强度驱动轻敲、抬头、手忙脚乱三类反应，200ms 聚合一次；只向渲染层传强度，不记录、不发送按键内容。默认 35% 灵敏度，可在动作设置里关闭
+- **摄像头视觉**：本机人脸检测，只输出「有人 / 离开 / 返回」事件驱动陪伴气泡；画面仅在本机内存处理，不落盘、不上传。默认关闭，授权仅本次会话有效
+- **模型拖放导入**：主窗与设置窗均可拖入 Live2D 模型文件夹或 ZIP，高亮描边提示，松手即导入并切换；拒绝 ZIP 路径穿越与 NTFS 数据流
+- **图形启动器** `launcher/`：PowerShell + WinForms 自绘界面，统一管理桌宠、TTS、ASR 三个服务的启停与状态；浅色（Sea Glass）/ 深色（Deep Current）双主题，配色按 WCAG 2.1 实测，最低对比度 4.49:1；`Launcher.cs` 用 .NET Framework 自带 `csc.exe` 编译成 GUI 子系统 exe，双击不闪控制台
+- **Windows 安装包**：electron-builder + NSIS，产物约 121 MiB；安装版使用独立数据目录 `%APPDATA%\DafeiyuDesktopPet`，不携带本地模型、语音、配置或密钥
+
+### 修复
+
+- **启动崩溃（严重）**：`electron/main.js` 在 `const electron = require('electron')` 声明之前读取 `electron.app.isPackaged`（TDZ），主进程加载即抛 `ReferenceError: Cannot access 'electron' before initialization`。源码版表现为弹出 Error 窗口，打包版表现为静默闪退并返回 `0x80000003`
+- **键盘响应无效**：`keyboard-sensor` 调起 `keyboard-win.ps1` 时缺少 `-ExecutionPolicy Bypass`，被系统 Restricted 策略拦截后静默降级；现已补上
+- **布局溢出**：启动器卡片与主按钮因 `Anchor` 含 `Right` 而顶穿窗口右边缘
+
+### 其它
+
+- 自动测试从 99 项扩到 **109 项**（9 组），新增角色导入、键盘响应、摄像头视觉三组
+- `THIRD_PARTY_NOTICES.md` 补充 PCL2 / HMCL / UI UX Pro Max 的设计参考声明（均未复制代码），并修正 Electron 版本号（45.2.1 → 实际 44.7.0）
+- `.gitignore` 补齐密钥、本地开发工具与内部工作记录的排除规则
+- `config.json` 移除本机绝对路径，TTS 参考音频与推理配置改由设置页填写
 ## 工作区本地 ASR 补丁
 
 - 聊天窗新增点击开始/停止录音与取消按钮，Escape 可取消；处理授权晚返回、重复提交和关窗清理
@@ -16,7 +30,7 @@
 - 默认 ASR 地址为 `http://127.0.0.1:8000/v1/audio/transcriptions`，录音上限 60 秒
 
 
-## v1.1.0（当前）
+## v1.1.0
 
 第一个在仓库发布的正式版。重点是让她「会演」：说话对口型、带动作，情绪有对应的脸和身体姿态。
 
