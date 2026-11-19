@@ -1,8 +1,18 @@
-# 大肥鱼桌宠（Live2D Desktop Pet）
+﻿# 大肥鱼桌宠（Live2D Desktop Pet）
 
 基于 **Electron + Live2D** 的桌面宠物，当前版本 **v1.1.0**。
 
 她会说话、对口型，说话时跟着语气点头抬眉；聊天时由模型在台词里安排手势和情绪，像虚拟主播一样表演；也可以在你玩游戏、写代码时坐在旁边看屏幕点评。模型来自 DeepSeek 免费公皮（不随仓库分发）。
+
+## 快速上手
+
+打开设置，默认进入“快速设置”：
+
+1. **能聊天**：填写 API 地址、模型和密钥，点“保存并连接”。密钥仍由 Windows 加密保存；连接测试会发送一条短请求。
+2. **能听**：本地 SenseVoice 自动检查状态；未启动时点“启动语音识别”。
+3. **能说**：推荐 Windows 系统语音，不需要部署 TTS 或填写参考音频；保存后点“试听一句”。已有 GPT-SoVITS 音色可在高级设置继续使用。
+
+首次配置后，日常启动桌宠即可；人设、记忆、自主陪伴和自定义语音仍在“导演 / API”高级页。
 
 ## 功能
 
@@ -20,6 +30,14 @@
 - 人设、显式记忆、看屏幕
 - **自主陪伴**：温柔关心 / 轻傲娇 / 安静克制 / **直播搭子**（定时看屏幕并点评，需授权窗口标题或截图）
 - 密钥保存在 Windows DPAPI 加密文件中
+
+### 语音输入（ASR）
+- 先运行根目录 `启动语音识别.cmd`，然后在聊天窗点击 🎙 开始录音，再点 ■ 停止并转写；可取消或按 Escape
+- 结果自动送入现有聊天、导演、TTS 和口型链路。录音期间停止聊天窗 TTS，采用半双工交互
+- 已部署 SenseVoice int8 + sherpa-onnx CPU 本地服务：`http://127.0.0.1:8000/v1/audio/transcriptions`
+- Python 环境、模型和日志在 `_asr/`（不提交），不需要 CUDA 或单独安装 FFmpeg；配置在 `config.json` 的 `asr`
+- 录音上限 60 秒、12MB；转写失败显示可操作提示，文字聊天保留。使用后可运行 `停止语音识别.cmd` 释放内存
+- 部署、依赖版本、模型校验和验收方式见 [asr/README.md](asr/README.md)
 
 ### 语音合成（TTS，可选）
 - 默认**关闭**，本仓库**不包含** GPT-SoVITS 服务与模型权重
@@ -57,9 +75,42 @@ npx electron .
 npm test
 ```
 
-共 6 组、99 项：编舞引擎、口型、生动层、表演层、直播搭子、模型接入。全部不联网。
+共 9 组、109 项：编舞引擎、口型、生动层、表演层、直播搭子、模型接入、角色导入、键盘响应、摄像头视觉。全部不联网。
+
+## 启动器
+
+`launcher/` 是一个独立的图形启动器，用来统一管理桌宠本体、TTS（GPT-SoVITS）与 ASR（SenseVoice）三个服务，不必再分别双击几个 `.cmd`。
+
+- **界面**：PowerShell 5.1 + WinForms 自绘，无第三方依赖；浅色 / 深色双主题，改 `launcher.ps1` 顶部的 `$Theme` 即可切换
+- **配色与对比度**：全部按 WCAG 2.1 实测，最低 4.49:1，详见 `launcher/UI设计方案-双配色.md`
+- **零窗口启动**：`Launcher.cs` 用 .NET Framework 自带的 `csc.exe` 编译成 GUI 子系统 exe，双击不闪控制台
+
+### 直接运行
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\launcher\launcher.ps1
+```
+
+### 编译成 exe
+
+```powershell
+& "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe" `
+  /target:winexe /optimize+ /out:"大肥鱼桌宠.exe" `
+  /win32icon:launcher\launcher.ico `
+  /r:System.Windows.Forms.dll launcher\Launcher.cs
+```
+
+产物需要与 `launcher\`、`app\`、`runtime\`、`data\` 同处一个目录树。目录结构见 `launcher\services.ps1` 顶部的路径定义。
+## Windows 安装包
+
+安装开发依赖后运行 `npm run dist` 生成 `dist/大肥鱼桌宠 Setup 1.1.0.exe`；`npm run dist:dir` 仅生成解包目录。当前构建未签名。安装包不含模型、ASR/TTS 服务或权重，也不迁移源码版的本地配置。安装后在托盘打开设置，自行导入有权使用的角色；独立配置目录为 `%APPDATA%\DafeiyuDesktopPet`。
+
+在主窗或设置窗拖入一个模型文件夹或 ZIP 即可导入并切换；主窗开启了自动鼠标穿透时，请在角色可点击区域放下，或直接使用设置窗。
 
 ## 隐私
+
+- 键盘响应默认以 35% 灵敏度开启。Windows 只在内存中聚合新按下次数和持续按住的标记，应用只收到强度，不记录、发送按键内容；系统不允许辅助脚本运行时，仅响应主窗、聊天窗及设置窗内的键盘，不更改系统策略。可在动作设置关闭。
+- 摄像头默认关闭；在「设置 → 动作」显式开启后，仅本次会话有效。画面只在本机内存中检测，不落盘、不上传；陪伴只收到有人、离开或返回事件，台词只显示为本地气泡，不调用远程导演或 TTS。关闭开关、锁屏或主窗关闭会释放摄像头；缺模型或设备不可用时保持关闭并显示说明。
 
 - 仓库**不包含**：API 密钥、桥接密钥、聊天记录、记忆库、DPAPI 加密文件、用户配置中的私密字段
 - `config.json` 中 `llm` / `director` / `tts` 均默认关闭或留空，不会自动联网

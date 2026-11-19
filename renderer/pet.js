@@ -45,6 +45,8 @@ const canvas = document.getElementById('view')
 const bubble = document.getElementById('bubble')
 const bubbleText = document.getElementById('bubbleText')
 const menuButton = document.getElementById('menuButton')
+const modelDropHint = document.getElementById('modelDropHint')
+modelDropHint.addEventListener('click', () => window.pet.openSettings())
 const sceneBackground = document.getElementById('sceneBackground')
 const APPEARANCE_KEY = 'pet-appearance-v1'
 let appearance = window.PetAppearance.normalize()
@@ -306,6 +308,7 @@ function setLiveliness(value) {
 function performGesture(name, options) {
   return Boolean(acting && acting.play(name, options || {}))
 }
+const keyboardReaction = window.createKeyboardReaction(performGesture)
 
 function setActingMood(name, intensity) {
   return Boolean(acting && acting.setMood(name, intensity))
@@ -505,9 +508,9 @@ function playMotionByName(keyword) {
   return model.playMotion(item.group, item.index)
 }
 
-function showBubble(text, ms = 6500, sayJa = '') {
+function showBubble(text, ms = 6500, sayJa = '', localOnly = false) {
   if (!text || !bubbleEnabled) return
-  console.error('[showBubble]', String(text).slice(0, 30))
+  if (!localOnly) console.error('[showBubble]', String(text).slice(0, 30))
   const parsed = window.PetDirectorMarkup
     ? window.PetDirectorMarkup.parseMarkup(text)
     : { speech: String(text), cues: [] }
@@ -519,8 +522,10 @@ function showBubble(text, ms = 6500, sayJa = '') {
   bubble.hidden = false
   scheduleSpeechCues(parsed.cues, speech.length)
   // 默认日语朗读；没有日语版时退回中文
-  if (sayJa) speak(sayJa, 'ja')
-  else speak(speech, 'zh')
+  if (!localOnly) {
+    if (sayJa) speak(sayJa, 'ja')
+    else speak(speech, 'zh')
+  }
   if (parsed.cues.length) {
     // 有标记：逐字显示；动作由 stepSpeechCues 按语音进度触发
     let i = 0
@@ -615,17 +620,11 @@ async function bootEngine() {
   if (info.tts && info.tts.sayLanguage) ttsSayLanguage = info.tts.sayLanguage
   if (info.tts) lipSync.enabled = info.tts.lipSync !== false
   if (info.tts) ttsEnabled = info.tts.enabled !== false
-  character = info.character || {
-    id: 'dafeiyu',
-    name: '大肥鱼',
-    speech: [],
-    defaultScale: { x: 1, y: 1 },
-    baseUrl: '/characters/dafeiyu/model3.json',
-  }
+  character = info.character || null
   // loadScale 优先恢复上次实际大小，缺失时才使用保存的默认值，
   // 这里绝不能再拿 manifest 的 defaultScale 去覆盖，否则每次启动比例都会被拽回旧值。
 
-  await loadCharacter(character)
+  if (character) await loadCharacter(character)
   startLoop()
 
   setDot('ready')
@@ -671,6 +670,7 @@ async function loadCharacter(next) {
   model = new window.Cubism5Model(canvas, { baseModelHeight: baseModelHeight(), characterId: next.id })
   model.resize(width, height)
   await model.load(next.baseUrl)
+  modelDropHint.hidden = true
   // 换角色时直接把渲染比例对齐目标值，不要播一段"从 1 缓动到目标"的动画
   renderScale.x = viewScale.x
   renderScale.y = viewScale.y
@@ -1626,7 +1626,7 @@ function updateClickThrough(clientX, clientY) {
   if (uiDragging > 0) return
 
   // 用户关掉"自动穿透"时，窗口保持可点（会挡住桌面，作为兜底）
-  if (!autoClickThrough) {
+  if (!autoClickThrough || document.documentElement.classList.contains('model-drop-active')) {
     if (lastInteractive !== true) {
       lastInteractive = true
       if (window.pet && typeof window.pet.setClickThrough === 'function') {
@@ -1636,9 +1636,16 @@ function updateClickThrough(clientX, clientY) {
     return
   }
 
+  // Native cursor polling already runs every 60ms. High-rate mouse devices must
+  // not synchronously stall the GPU with readPixels on every mousemove.
+  const hitNow = performance.now()
+  if (hitNow - hitTestAt < 50) return
+  hitTestAt = hitNow
+
   let interactive =
     insideElement(barEl, clientX, clientY) ||
     insideElement(menuButton, clientX, clientY) ||
+    insideElement(modelDropHint, clientX, clientY) ||
     insideElement(handleEl, clientX, clientY) ||
     insideElement(chatEl, clientX, clientY) ||
     insideElement(bubble, clientX, clientY) ||
@@ -2635,7 +2642,6 @@ if (breathRange) {
 // --------------------------------------------------------- character import
 
 const characterSelect = document.getElementById('characterSelect')
-const dropZone = document.getElementById('dropZone')
 const dropStatus = document.getElementById('dropStatus')
 
 function setDropStatus(text, kind) {
@@ -2663,37 +2669,6 @@ async function refreshCharacterList() {
   }
 }
 
-async function importCharacterFile(file) {
-  if (!file) return
-  if (!window.pet || typeof window.pet.importCharacter !== 'function') {
-    setDropStatus('当前版本不支持导入', 'error')
-    return
-  }
-  if (!/\.zip$/i.test(file.name || '')) {
-    setDropStatus('只能导入 .zip 压缩包（收到：' + (file.name || '未知') + '）', 'error')
-    return
-  }
-  const filePath = window.pet.pathForFile(file)
-  if (!filePath) {
-    setDropStatus('拿不到文件路径，请把 zip 放到本地磁盘再拖进来', 'error')
-    return
-  }
-
-  setDropStatus('正在解压：' + file.name + ' …')
-  try {
-    const result = await window.pet.importCharacter(filePath)
-    if (!result || !result.ok) {
-      setDropStatus('导入失败：' + ((result && result.error) || '未知错误'), 'error')
-      return
-    }
-    setDropStatus('导入成功：' + result.character.name + '（' + (result.files || 0) + ' 个文件）', 'ok')
-    await refreshCharacterList()
-    await loadCharacter(result.character)
-  } catch (error) {
-    setDropStatus('导入失败：' + error.message, 'error')
-  }
-}
-
 if (characterSelect) {
   characterSelect.addEventListener('change', async () => {
     const id = characterSelect.value
@@ -2704,37 +2679,7 @@ if (characterSelect) {
   })
 }
 
-if (dropZone) {
-  for (const type of ['dragenter', 'dragover']) {
-    dropZone.addEventListener(type, (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-      dropZone.classList.add('active')
-    })
-  }
-  for (const type of ['dragleave', 'dragend']) {
-    dropZone.addEventListener(type, () => dropZone.classList.remove('active'))
-  }
-  dropZone.addEventListener('drop', (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    dropZone.classList.remove('active')
-    const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]
-    importCharacterFile(file)
-  })
-}
-
-// 整个窗口挡住默认拖放（否则会把文件当页面加载）
-for (const type of ['dragover', 'drop']) {
-  window.addEventListener(
-    type,
-    (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-    },
-    false,
-  )
-}
+window.installModelDrop(window.pet, refreshCharacterList)
 
 // 自动穿透开关：关掉后窗口始终可点（会挡住桌面），用来应付光标检测失灵
 let autoClickThrough = true
@@ -3223,6 +3168,15 @@ function dumpMasks() {
 
 window.pet.onEvent((payload) => {
   if (!payload) return
+  if (payload.type === 'camera-presence-line') {
+    if (!showRunning && !directorRuntime.status().running) showBubble(payload.line, 4700, '', true)
+    return
+  }
+  if (payload.type === 'keyboard-strength') {
+    if (model && !document.hidden && !showRunning && !directorRuntime.status().requestId) keyboardReaction.push(payload.strength)
+    return
+  }
+  if (payload.type === 'keyboard-preferences') { keyboardReaction.configure(payload.preferences); return }
   if (payload.type === 'director-cancel') {
     if (!payload.requestId || directorRuntime.status().requestId === payload.requestId) directorRuntime.cancel('cancelled')
     return
@@ -3382,6 +3336,7 @@ window.pet.onEvent((payload) => {
     return
   }
   if (payload.type === 'character' && payload.character) {
+    void refreshCharacterList()
     loadCharacter(payload.character).catch((error) => {
       setStatus('换角色失败：' + error.message, true)
       setDot('error')

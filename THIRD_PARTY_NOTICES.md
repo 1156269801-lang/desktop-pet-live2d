@@ -1,4 +1,4 @@
-# 第三方组件、代码来源与参考说明
+﻿# 第三方组件、代码来源与参考说明
 
 本项目的代码与资产来源按下面几类列出：随仓库分发的第三方文件、移植与改编的代码、只作设计参考的项目、模型与音频。
 
@@ -6,7 +6,11 @@
 
 | 组件 | 位置 / 版本 | 许可 | 来源 |
 |---|---|---|---|
-| **Electron** | 45.2.1（开发依赖，运行时） | MIT | https://github.com/electron/electron |
+| **Electron** | 44.7.0（开发依赖，运行时） | MIT；运行时附 Chromium 许可清单 | https://github.com/electron/electron |
+| **electron-builder** | 26.16.1（仅构建；安装包附许可，不含构建工具代码） | MIT | https://github.com/electron-userland/electron-builder |
+| **NSIS** | electron-builder 工具资源 3.0.4.1 / 3.4.1（安装器与资源） | zlib/libpng、bzip2、CPL-1.0 等，见 `licenses/nsis.txt` | https://nsis.sourceforge.io/ ，由 electron-builder 提供构建资源 |
+| **@mediapipe/tasks-vision** | 0.10.21；`assets/mediapipe/` 中的 JS 与 WASM（原样分发） | Apache-2.0，许可全文随包 | https://www.npmjs.com/package/@mediapipe/tasks-vision |
+| **MediaPipe BlazeFace Short-Range** | float16/1，`assets/mediapipe/blaze_face_short_range.tflite` | Apache-2.0，见官方模型卡 | 来源、许可与哈希见 `assets/mediapipe/PROVENANCE.md` |
 | **ws** | ^8.18.0（QQ 网关用） | MIT | https://github.com/websockets/ws |
 | **Live2D Cubism Core** | `assets/vendor/live2dcubismcore.min.js` | Live2D Proprietary Software License（Redistributable Code） | https://www.live2d.com/ |
 | **Live2D Cubism Web Framework** | `assets/sdk/cubism5-framework.js`、`assets/sdk/shaders/`（5-r.1 的打包产物） | Live2D Open Software License | https://github.com/Live2D/CubismWebFramework |
@@ -71,6 +75,10 @@ SOFTWARE.
 
 | 项目 / 资料 | 参考点 |
 |---|---|
+| **BongoCat 系列交互（任务书给出的参考；MIT 项目 `liwenka1/bongo-cat-next`）** | 把模型拖进窗口后导入并切换；仅参考交互，未复制代码或素材，未访问或使用 AGPL 项目 |
+| **BongoCat 键盘响应（`liwenka1/bongo-cat-next`，MIT）** | 输入越密集，动作越明显；计数和表演代码自行实现，未复制代码或素材 |
+| **Microsoft Win32 `GetAsyncKeyState` 文档** | 键盘按下状态的高位语义；本项目自行通过 PowerShell 调用系统 API，无第三方运行库 |
+| **Google MediaPipe Face Detector Web 指南** | FaceDetector 和本地 WASM 载入方式；摄像头授权、状态机与陪伴接入自行实现，未复制示例代码 |
 | **jingyu-live2d-agent** | 除上一节移植的部分外，还参考了它「自然语言 → 动作时间线」的整体分层，以及把虚拟主播能力拆成表演、语音、感知的做法 |
 | **Live2D CubismWebSamples** | 遮罩缓冲的用法（按每个 drawable 的遮罩数分配缓冲、先 `startUp` 渲染器），用来解决早期渲染方案的脸部黑块 |
 | **WHALEL2D** | `〔〕` 内联动作语言的思路 |
@@ -113,3 +121,17 @@ SOFTWARE.
 ## 声明
 
 若你是上述资产或代码的权利人，认为本项目使用不当，请通过仓库 Issue 联系，我们会及时处理。
+
+### 启动器界面的设计参考（未复制代码）
+
+启动器（`launcher/`）的自绘界面在布局与配色上参考了下列公开项目，**均只作设计参考，未复制任何代码或素材**：
+
+| 项目 | 许可 | 参考点 |
+|---|---|---|
+| **PCL2（Plain Craft Launcher 2）** | 闭源免费 | 顶部工具条 + 左侧栏 + 卡片式主区的三段布局；侧栏选中项的左侧竖条指示；浅色底 + 白色卡片 + 单一强调色的配色组织 |
+| **HMCL（Hello Minecraft! Launcher）** | GPL-3.0 | 侧栏分组（核心 / 诊断 / 信息）与超大主按钮的视觉权重分配；仅观察其界面截图，未接触源码 |
+| **UI UX Pro Max**（[nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)，MIT） | MIT | 用其 `search.py` 检索「desktop launcher utility」得到风格与配色建议（Minimalism & Swiss Style、Primary `#2563EB` + Accent `#EA580C`、对比度 4.5:1 的交付清单），本文档的双配色方案在此基础上按鲸鱼娘主题调整并重新核算 WCAG |
+
+`launcher/launcher.ps1` 的 WinForms 绘制代码（圆角卡片、渐变按钮、状态灯、双缓冲处理）为自行实现；配色方案与对比度数值由本项目用脚本实测得出，见 `launcher/UI设计方案-双配色.md`。
+
+启动器 exe 使用 .NET Framework 自带的 `csc.exe` 编译，不依赖任何第三方打包工具。

@@ -2,18 +2,66 @@
   "name": "dsh-desktop-pet",
   "version": "1.1.0",
   "private": false,
-  "description": "大肥鱼桌面宠物：口型同步、表演层与情绪、台词行内标记、直播搭子、可选本地 TTS",
+  "description": "大肥鱼桌面宠物：ASR 语音输入、口型同步、表演层与情绪、台词行内标记、直播搭子、可选本地 TTS",
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node engine/test/choreo.test.js && node engine/test/lip-sync.test.js && node engine/test/liveliness.test.js && node engine/test/acting.test.js && node engine/test/streamer.test.js && node engine/test/provider.test.js"
+    "dist": "electron-builder --win nsis",
+    "dist:dir": "electron-builder --win --dir",
+    "test": "node engine/test/choreo.test.js && node engine/test/lip-sync.test.js && node engine/test/liveliness.test.js && node engine/test/acting.test.js && node engine/test/streamer.test.js && node engine/test/provider.test.js && node --test engine/test/character-import.test.js engine/test/keyboard-reaction.test.js engine/test/camera-sensor.test.js"
   },
   "dependencies": {
     "ws": "^8.18.0"
   },
+  "build": {
+    "appId": "com.dafeiyu.desktoppet",
+    "productName": "大肥鱼桌宠",
+    "directories": {
+      "output": "dist"
+    },
+    "npmRebuild": false,
+    "asar": false,
+    "files": [
+      "electron/**",
+      "renderer/**",
+      "engine/**",
+      "!**/*.test.js",
+      "!engine/test/**",
+      "assets/**",
+      "package.json",
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md"
+    ],
+    "extraFiles": [
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md",
+      "licenses/nsis.txt",
+      {
+        "from": "node_modules/electron-builder/LICENSE",
+        "to": "licenses/electron-builder.txt"
+      },
+      {
+        "from": "node_modules/ws/LICENSE",
+        "to": "licenses/ws.txt"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico",
+      "signExecutable": false
+    },
+    "nsis": {
+      "artifactName": "${productName} Setup ${version}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true
+    }
+  },
   "devDependencies": {
     "@hazart-pkg/live2d-core": "^1.0.1",
-    "electron": "45.2.1",
+    "electron": "44.7.0",
+    "electron-builder": "26.16.1",
     "esbuild": "^0.28.2"
   }
 }

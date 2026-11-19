@@ -266,6 +266,7 @@ function createDirector({ root, config, saveConfig, getCapabilities, getDisplays
     autonomyState: publicAutonomyState,
     autonomyStop: () => { autonomy.stop('user-stop'); cancelCurrent(); return publicAutonomyState() },
     interact: () => autonomy.interact(),
+    cameraPresence: (event) => autonomy.cameraPresence(event, (line) => send({ type: 'camera-presence-line', line })),
     shutdown: () => { memory.shutdown(); autonomy.shutdown(); shared.revoke(); scene.invalidate(); cancelCurrent() },
     diagnosticsAllowed: () => config.director.allowDiagnostics === true,
     hasKey: () => { try { return vault.has('provider') } catch { return false } },

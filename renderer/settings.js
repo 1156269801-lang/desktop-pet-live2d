@@ -13,7 +13,7 @@ const settingsTabList = document.querySelector('.settings-tabs')
 const getSettingsTabs = () => [...settingsTabList.querySelectorAll('[role="tab"][data-settings-tab]')]
 const settingsScroll = document.getElementById('settingsScroll')
 const settingsScrollPositions = new Map()
-let activeSettingsTab = 'appearance'
+let activeSettingsTab = 'quick'
 function selectSettingsTab(name, moveFocus = false) {
   const settingsTabs = getSettingsTabs()
   const selected = settingsTabs.find(tab => tab.dataset.settingsTab === name)
@@ -72,7 +72,7 @@ settingsTabList.addEventListener('keydown', event => {
     event.preventDefault()
     selectSettingsTab(settingsTabs[next].dataset.settingsTab, true)
 })
-selectSettingsTab('appearance')
+selectSettingsTab('quick')
 document.querySelectorAll('.background-details').forEach(details => {
   const summary = details.querySelector('summary')
   summary.setAttribute('aria-expanded', String(details.open))
@@ -142,7 +142,6 @@ document.getElementById('resetAppearance').addEventListener('click',()=>changeAp
 renderAppearance(appearanceState)
 
 const characterGrid = document.getElementById('characterGrid')
-const dropZone = document.getElementById('dropZone')
 const statusEl = document.getElementById('status')
 const watchToggle = document.getElementById('watchToggle')
 const gazeToggle = document.getElementById('gazeToggle')
@@ -202,7 +201,7 @@ async function refreshCharacters() {
   if (!(result.items || []).length) {
     const empty = document.createElement('p')
     empty.className = 'character-empty'
-    empty.textContent = '还没有可用角色，请在下方导入 Live2D ZIP 模型包。'
+    empty.textContent = '还没有可用角色，请拖入 Live2D 模型文件夹或 ZIP。'
     characterGrid.appendChild(empty)
   }
   for (const item of result.items || []) {
@@ -258,7 +257,6 @@ async function refreshCharacters() {
 
 // -------------------------------------------------------------------- 导入
 
-let characterImportBusy = false
 const chooseCharacterFile = document.getElementById('chooseCharacterFile')
 const characterZipInput = document.getElementById('characterZipInput')
 chooseCharacterFile.addEventListener('click', () => characterZipInput.click())
@@ -268,59 +266,8 @@ characterZipInput.addEventListener('change', () => {
   characterZipInput.value = ''
 })
 
-async function importFile(file) {
-  if (!file || characterImportBusy) return
-  if (!/\.zip$/i.test(file.name || '')) {
-    setStatus('只能导入 .zip（收到：' + (file.name || '未知') + '）', 'error')
-    return
-  }
-  const filePath = api.pathForFile(file)
-  if (!filePath) {
-    setStatus('拿不到文件路径，请把 zip 放到本地磁盘再拖', 'error')
-    return
-  }
-  setStatus('正在解压：' + file.name + ' …')
-  characterImportBusy = true
-  chooseCharacterFile.disabled = true
-  dropZone.setAttribute('aria-busy', 'true')
-  try {
-    const result = await api.importCharacter(filePath)
-    if (!result || !result.ok) throw new Error((result && result.error) || '未知')
-    setStatus('导入成功：' + result.character.name + '（' + (result.files || 0) + ' 个文件）', 'ok')
-    await refreshCharacters()
-  } catch (error) {
-    setStatus('导入失败：' + error.message, 'error')
-  } finally {
-    characterImportBusy = false
-    chooseCharacterFile.disabled = false
-    dropZone.setAttribute('aria-busy', 'false')
-  }
-}
-
-if (dropZone) {
-  for (const type of ['dragenter', 'dragover']) {
-    dropZone.addEventListener(type, (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-      dropZone.classList.add('active')
-    })
-  }
-  for (const type of ['dragleave', 'dragend']) {
-    dropZone.addEventListener(type, () => dropZone.classList.remove('active'))
-  }
-  dropZone.addEventListener('drop', (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    dropZone.classList.remove('active')
-    importFile(event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0])
-  })
-}
-for (const type of ['dragover', 'drop']) {
-  window.addEventListener(type, (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-  })
-}
+const importFile = window.installModelDrop(api, refreshCharacters)
+api?.onCharactersChanged(refreshCharacters)
 
 // -------------------------------------------------------------------- 控件
 
@@ -372,6 +319,23 @@ bindRange(livelinessRange, livelinessValue, 'liveliness', (v) => (v ? Math.round
 
 const actingScaleRange = document.getElementById('actingScaleRange')
 const actingScaleValue = document.getElementById('actingScaleValue')
+const keyboardToggle = document.getElementById('keyboardToggle')
+const keyboardRange = document.getElementById('keyboardSensitivity')
+const keyboardValue = document.getElementById('keyboardSensitivityValue')
+bindToggle(keyboardToggle, 'keyboardEnabled')
+bindRange(keyboardRange, keyboardValue, 'keyboardSensitivity', (value) => value + '%')
+const cameraToggle = document.getElementById('cameraToggle')
+const cameraStatus = document.getElementById('cameraStatus')
+function updateCamera(state) {
+  cameraToggle.checked = state?.status === 'on' || state?.status === 'starting'
+  cameraStatus.textContent = state?.message || '摄像头默认关闭，画面仅在本机检测。'
+}
+cameraToggle.addEventListener('change', async (event) => {
+  if (!event.isTrusted) return
+  try { updateCamera(await api.setCamera(cameraToggle.checked)) }
+  catch { updateCamera({ message: '无法设置摄像头，请重新打开设置。' }) }
+})
+api?.onCameraState(updateCamera)
 bindRange(actingScaleRange, actingScaleValue, 'actingScale', (v) => (v ? Math.round(v) + '%' : '关闭'))
 
 // 表演试演：手势与情绪的列表直接取自 acting.js，和模型能用的是同一份
@@ -463,6 +427,12 @@ async function init() {
   await refreshCharacters()
   const state = await api.state()
   renderWindowState(state)
+  updateCamera(await api.cameraState())
+  if (state?.keyboard) {
+    keyboardToggle.checked = state.keyboard.enabled === true
+    keyboardRange.value = String(state.keyboard.sensitivity)
+    keyboardValue.textContent = keyboardRange.value + '%'
+  }
   // 向主窗口要一份当前设置值
   send('requestState')
   appearanceMessage('更改即时生效 · 拖动标题栏可移动窗口')

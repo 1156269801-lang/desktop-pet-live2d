@@ -1,12 +1,14 @@
 /* Shared controls for the pet's local utility windows. No remote font or icon dependency. */
+/* 鲸鱼娘配色：海洋蓝主题 + 粉色腮红点缀 */
 :root {
-  --ui-ink: #1b2a44;
-  --ui-muted: #52647a;
-  --ui-accent: #365f86;
+  --ui-ink: #0d3a5f;           /* 深海蓝文字 */
+  --ui-muted: #4a7ba7;         /* 柔和海蓝 */
+  --ui-accent: #1e88e5;        /* 鲸鱼主色调 */
   --ui-surface: #ffffff;
-  --ui-soft: #f1f5f9;
-  --ui-line: #c6d2df;
-  --ui-focus: #176caa;
+  --ui-soft: #e3f2fd;          /* 浅天空蓝背景 */
+  --ui-line: #b3d9f2;          /* 水蓝边框 */
+  --ui-focus: #0d47a1;         /* 深蓝聚焦 */
+  --ui-blush: #ff9cc2;         /* 鲸鱼娘腮红粉 */
   --ui-radius: 12px;
   --ui-control: 36px;
   --ui-space-1: 4px;
@@ -20,8 +22,8 @@ button { touch-action: manipulation; }
 button:disabled { opacity: .55; cursor: not-allowed; }
 button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 3px; }
 input, textarea { caret-color: var(--ui-accent); }
-input::placeholder, textarea::placeholder { color: #52647a; opacity: 1; }
-::selection { background: #c9ddef; color: #10283e; }
-* { scrollbar-width: thin; scrollbar-color: #8195ad transparent; }
+input::placeholder, textarea::placeholder { color: #4a7ba7; opacity: 1; }
+::selection { background: #b3e5fc; color: #01579b; }
+* { scrollbar-width: thin; scrollbar-color: #64b5f6 transparent; }
 .ui-icon { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }

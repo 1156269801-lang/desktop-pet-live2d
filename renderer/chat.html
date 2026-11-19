@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; media-src 'self' blob:;" />
 <title>聊天</title>
 <link rel="stylesheet" href="pet.css" />
 <style>
@@ -26,6 +26,9 @@
     background: transparent; color: #1b2a44; cursor: pointer;
   }
   .chat-close:hover { background: rgba(45,63,99,.12); }
+  #voice { min-width: 38px; padding: 0 8px; }
+  #voice.recording { background: #d65a63; color: white; }
+  #voice:disabled { opacity: .45; }
 </style>
 </head>
 <body>
@@ -37,10 +40,14 @@
     <div id="log" class="log"></div>
     <form id="composer" class="composer">
       <input id="input" type="text" placeholder="和她说点什么…" autocomplete="off" maxlength="2000" />
-      <button type="submit" id="send">发送</button>
+      <button type="button" id="voice" title="点击开始录音" aria-label="点击开始录音" aria-pressed="false" aria-describedby="voiceStatus">🎙</button>
+      <button type="button" id="cancelVoice" hidden>取消录音</button>
+       <button type="submit" id="send">发送</button>
     </form>
+    <div id="voiceStatus" role="status" aria-live="polite" style="font-size:12px;padding:0 12px 4px"></div>
   </div>
   <script src="lip-sync.js"></script>
+  <script src="chat-voice.js"></script>
   <script src="chat.js"></script>
 </body>
 </html>

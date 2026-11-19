@@ -66,7 +66,7 @@ function createAutonomous({ config, saveConfig, getCapabilities, providerReady, 
   let running = false, phase = 'stopped', reason = null, lastError = null, nextRunAt = null, sessionEndsAt = null
   let timer = null, sessionTimer = null, controller = null, generation = 0, onceOnly = false, busy = false
   let rounds = 0, spoken = 0, failures = 0, silentUntil = 0, lastSpokenAt = -Infinity
-  let lastCombo = null, day = null, lastEvent = null
+  let lastCombo = null, day = null, lastEvent = null, lastPresenceAt = -Infinity
   const repeats = new Map(), events = createEventGate({ now }), life = createLifeState({ now })
   const recentSay = [], recentActions = [], recentScenes = []
   const remember = (list, value, limit) => { list.push(value); if (list.length > limit) list.splice(0, list.length - limit) }
@@ -324,7 +324,13 @@ function createAutonomous({ config, saveConfig, getCapabilities, providerReady, 
       if (token === generation) { busy = false; controller = null }
     }
   }
-  return { state, save, start: () => begin(false), once: () => begin(true), stop, interact, invalidateContext,
+  function cameraPresence(event, show) {
+    const lines = { arrived: '嗨，看到你啦。', left: '咦，人呢？', returned: '欢迎回来。' }
+    if (!Object.hasOwn(lines, event) || busy || quiet() || now() - lastPresenceAt < 3500 || now() - lastSpokenAt < 3500) return
+    lastPresenceAt = now()
+    show(lines[event])
+  }
+  return { state, save, start: () => begin(false), once: () => begin(true), stop, interact, invalidateContext, cameraPresence,
     systemEvent: event => {
       if (!['lock', 'suspend', 'shutdown', 'resume', 'unlock'].includes(event)) return denied(400, 'invalid-system-event')
       stop('system-' + event, false); cancelPerformance(); invalidateContext(); return state()

@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="ui-tokens.css" />
 <link rel="stylesheet" href="settings.css" />
 <link rel="stylesheet" href="context-settings.css" />
+<link rel="stylesheet" href="quick-setup.css" />
 </head>
 <body class="settings-body settings-page">
   <div class="settings-shell">
@@ -18,14 +19,64 @@
       <button type="button" class="chat-close" id="btnClose" title="关闭设置（Esc）" aria-label="关闭设置"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15" /></svg></button>
     </header>
     <div class="settings-tabs" role="tablist" aria-label="设置分类">
-      <button type="button" id="settingsTabAppearance" role="tab" data-settings-tab="appearance" aria-controls="settingsPanelAppearance" aria-selected="true" tabindex="0">外观</button>
+      <button type="button" id="settingsTabQuick" role="tab" data-settings-tab="quick" aria-controls="settingsPanelQuick" aria-selected="true" tabindex="0">快速设置</button>
+      <button type="button" id="settingsTabAppearance" role="tab" data-settings-tab="appearance" aria-controls="settingsPanelAppearance" aria-selected="false" tabindex="-1">外观</button>
       <button type="button" id="settingsTabBehavior" role="tab" data-settings-tab="behavior" aria-controls="settingsPanelBehavior" aria-selected="false" tabindex="-1">动作</button>
       <button type="button" id="settingsTabCharacter" role="tab" data-settings-tab="character" aria-controls="settingsPanelCharacter" aria-selected="false" tabindex="-1">角色</button>
       <button type="button" id="settingsTabWindow" role="tab" data-settings-tab="window" aria-controls="settingsPanelWindow" aria-selected="false" tabindex="-1">窗口</button>
       <button type="button" id="settingsTabDirector" role="tab" data-settings-tab="director" aria-controls="settingsPanelDirector" aria-selected="false" tabindex="-1">导演 / API</button>
     </div>
     <main class="settings-scroll" id="settingsScroll">
-      <section class="settings-panel" id="settingsPanelAppearance" role="tabpanel" aria-labelledby="settingsTabAppearance" data-settings-panel="appearance">
+      <section class="settings-panel quick-setup" id="settingsPanelQuick" role="tabpanel" aria-labelledby="settingsTabQuick" data-settings-panel="quick">
+        <div class="quick-intro"><h2>先让她聊起来</h2><p class="settings-help">按需设置聊天、听你说、开口说。打开本页只检查状态，不会请求模型或播放声音。</p><button type="button" class="panel-mini settings-secondary" id="quickRefresh">刷新状态</button></div>
+        <section class="quick-card" aria-labelledby="quickChatHeading">
+          <div class="quick-card-head"><h3 id="quickChatHeading"><span class="quick-step" aria-hidden="true">1</span>能聊天</h3><span class="quick-badge" id="quickChatBadge">检查中</span></div>
+          <form id="quickChatForm">
+            <label class="director-field" for="quickBaseURL"><span>API 地址</span><input type="url" id="quickBaseURL" placeholder="https://api.example.com/v1" autocomplete="off" spellcheck="false" required disabled /></label>
+            <label class="director-field" for="quickModel"><span>模型名称</span><input type="text" id="quickModel" placeholder="服务商提供的模型名称" autocomplete="off" spellcheck="false" required disabled /></label>
+            <label class="director-field" for="quickApiKey"><span>API 密钥</span><input type="password" id="quickApiKey" placeholder="输入密钥" autocomplete="new-password" spellcheck="false" aria-describedby="quickKeyHelp" disabled /></label>
+            <p class="settings-help" id="quickKeyHelp">密钥交给系统加密保存，不会回显；已保存时可留空沿用。</p>
+            <p class="settings-help" id="quickConnectHelp">点击会保存配置，并向所填服务商发送一条短测试请求；可能产生少量用量。</p>
+            <button type="submit" class="panel-mini settings-primary" id="quickConnect" aria-describedby="quickConnectHelp" disabled>保存并连接</button>
+          </form>
+          <p class="quick-status" id="quickChatStatus" role="status" aria-live="polite" aria-atomic="true">正在读取聊天配置…</p>
+        </section>
+        <section class="quick-card" aria-labelledby="quickAsrHeading">
+          <div class="quick-card-head"><h3 id="quickAsrHeading"><span class="quick-step" aria-hidden="true">2</span>能听</h3><span class="quick-badge" id="quickAsrBadge">检查中</span></div>
+          <p class="settings-help">本地语音识别。就绪后，在聊天窗点击麦克风录音，再点击停止并转写。</p>
+          <div class="quick-actions"><button type="button" class="panel-mini settings-primary" id="quickStartAsr" disabled>启动语音识别</button></div>
+          <p class="quick-status" id="quickAsrStatus" role="status" aria-live="polite" aria-atomic="true">正在检查语音识别…</p>
+        </section>
+        <section class="quick-card" aria-labelledby="quickVoiceHeading">
+          <div class="quick-card-head"><h3 id="quickVoiceHeading"><span class="quick-step" aria-hidden="true">3</span>能说</h3><span class="quick-badge" id="quickVoiceBadge">检查中</span></div>
+          <form id="quickVoiceForm">
+            <label class="director-field" for="quickVoiceEngine"><span>语音方式</span><select id="quickVoiceEngine" disabled><option value="system">系统语音 · 推荐，无需参考音频</option><option value="gpt-sovits">GPT-SoVITS · 本地自定义声音</option></select></label>
+            <label class="director-field" for="quickVoice" id="quickVoiceField"><span>系统声音</span><select id="quickVoice" disabled><option value="">系统默认声音</option></select></label>
+            <div id="quickGptFields" hidden>
+              <label class="director-field" for="quickVoicePreset"><span>角色音色预设</span><select id="quickVoicePreset"><option value="custom">自定义配置</option></select></label>
+              <label class="director-field" for="quickVoiceUrl"><span>本地服务地址</span><input type="url" id="quickVoiceUrl" placeholder="http://127.0.0.1:9880/tts" autocomplete="off" spellcheck="false" maxlength="1000" disabled /></label>
+              <div class="director-field"><label for="quickRefAudio">参考音频路径</label><div class="quick-file-row"><input type="text" id="quickRefAudio" placeholder="选择本机参考音频文件" autocomplete="off" spellcheck="false" maxlength="1000" disabled /><button type="button" class="panel-mini" id="quickPickReference" disabled>浏览…</button></div></div>
+              <label class="director-field" for="quickRefText"><span>参考音频对应文字</span><textarea id="quickRefText" rows="3" maxlength="2000" placeholder="填写音频中实际说出的内容；部分模型允许留空" disabled></textarea></label>
+              <div class="quick-language-row">
+                <label class="director-field" for="quickRefLang"><span>参考音频语言</span><select id="quickRefLang" disabled><option value="ja">日语</option><option value="zh">中文</option><option value="en">英语</option><option value="ko">韩语</option><option value="yue">粤语</option></select></label>
+                <label class="director-field" for="quickSayLanguage"><span>朗读语言</span><select id="quickSayLanguage" disabled><option value="ja">日语</option><option value="zh">中文</option><option value="en">英语</option><option value="ko">韩语</option><option value="yue">粤语</option></select></label>
+              </div>
+            </div>
+            <p class="settings-help" id="quickVoiceHelp">系统语音开箱即用，无需部署服务或准备参考音频。</p>
+            <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>说话时同步口型</span><small>系统语音与 GPT-SoVITS 共用</small></span><input type="checkbox" id="quickLipSync" checked disabled /></label>
+            <label class="settings-row settings-toggle"><span class="settings-option-copy"><span>启用说话声音</span><small>保存后用于后续对话；不会立即讲话</small></span><input type="checkbox" id="quickVoiceEnabled" disabled /></label>
+            <div class="quick-actions"><button type="submit" class="panel-mini settings-primary" id="quickSaveVoice" disabled>保存语音</button><button type="button" class="panel-mini" id="quickStartTts" disabled>一键启动TTS</button><button type="button" class="panel-mini" id="quickDetectVoice" aria-describedby="quickDetectHelp" disabled>一键检测</button><button type="button" class="panel-mini" id="quickTestVoice" disabled>试听一句</button></div>
+          </form>
+          <p class="settings-help" id="quickDetectHelp">检测已保存的配置，会试合成语音，但不自动播放；“试听一句”会单独合成并播放。</p>
+          <p class="quick-status" id="quickDetectStatus" role="status" aria-live="polite" aria-atomic="true">尚未检测。保存配置后可一键检查。</p>
+          <ul class="quick-checks" id="quickVoiceChecks" aria-label="语音检测分项" hidden></ul>
+          <audio id="quickDetectAudio" controls hidden aria-label="检测合成音频，点击播放"></audio>
+          <audio id="quickVoiceAudio" controls hidden aria-label="语音试听"></audio>
+          <p class="quick-status" id="quickVoiceStatus" role="status" aria-live="polite" aria-atomic="true">正在读取语音配置…</p>
+        </section>
+        <p class="settings-help quick-advanced">需要人设、参考音频或更多参数？<button type="button" class="quick-link" id="quickAdvanced">打开导演 / API 高级设置</button></p>
+      </section>
+      <section class="settings-panel" id="settingsPanelAppearance" role="tabpanel" aria-labelledby="settingsTabAppearance" data-settings-panel="appearance" hidden inert>
         <div class="settings-group appearance-group">
           <h2 class="settings-group-title" id="appearanceHeading">对话与背景</h2>
           
@@ -78,6 +129,10 @@
           <h3 class="settings-group-title">表演试演</h3>
           <p class="settings-help">点一下让她做一次。聊天时，模型会自己在台词里安排这些手势和情绪。</p>
           <div class="settings-row"><label class="settings-label" for="actingScaleRange">表演幅度</label><input type="range" id="actingScaleRange" class="modal-range" min="0" max="200" step="10" value="100" /><output class="modal-value" id="actingScaleValue" for="actingScaleRange">100%</output></div>
+          <div class="settings-row"><label class="settings-label" for="keyboardToggle">键盘响应</label><input type="checkbox" id="keyboardToggle" checked /></div>
+          <div class="settings-row"><label class="settings-label" for="keyboardSensitivity">键盘灵敏度</label><input type="range" id="keyboardSensitivity" class="modal-range" min="0" max="100" step="5" value="35" /><output class="modal-value" id="keyboardSensitivityValue" for="keyboardSensitivity">35%</output></div>
+          <div class="settings-row"><label class="settings-label" for="cameraToggle">摄像头视觉（仅本次）</label><input type="checkbox" id="cameraToggle" /></div>
+          <div id="cameraStatus" role="status">摄像头默认关闭，画面仅在本机检测。</div>
           <p class="modal-hint">手势、情绪姿态和身体摆动的大小。觉得不够明显就往右拖；调到 0 关闭表演。</p>
           <div class="perform-chips" id="performChips" role="group" aria-label="手势"></div>
           <div class="perform-chips" id="moodChips" role="group" aria-label="情绪"></div>
@@ -86,7 +141,7 @@
       <section class="settings-panel" id="settingsPanelCharacter" role="tabpanel" aria-labelledby="settingsTabCharacter" data-settings-panel="character" hidden inert>
         <div class="settings-group"><h2 class="settings-group-title">选择角色</h2><div class="character-grid" id="characterGrid" aria-label="可用角色" aria-busy="true"></div></div>
         <div class="settings-group settings-divider"><h3 class="settings-group-title">导入角色</h3>
-          <div class="dropzone" id="dropZone"><div class="dropzone-text">把角色压缩包拖到这里</div><div class="dropzone-hint">支持 .zip（Live2D 模型包）</div><button type="button" class="panel-mini" id="chooseCharacterFile">选择 ZIP 文件…</button><input type="file" id="characterZipInput" accept=".zip,application/zip" hidden /></div>
+          <div class="dropzone" id="dropZone"><div class="dropzone-text">把模型文件夹或 ZIP 拖入窗口</div><div class="dropzone-hint">支持 Live2D 模型包</div><button type="button" class="panel-mini" id="chooseCharacterFile">选择 ZIP 文件…</button><input type="file" id="characterZipInput" accept=".zip,application/zip" hidden /></div>
           <div class="dropzone-status" id="status" role="status" aria-live="polite"></div>
         </div>
       </section>
@@ -401,7 +456,10 @@
   </div>
   <script src="appearance.js"></script>
   <script src="acting.js"></script>
+  <link rel="stylesheet" href="model-drop.css" />
+  <script src="model-drop.js"></script>
   <script src="settings.js"></script>
+  <script src="quick-setup.js"></script>
   <script src="director-settings.js"></script>
   <script src="persona-settings.js"></script>
   <script src="memory-settings.js"></script>

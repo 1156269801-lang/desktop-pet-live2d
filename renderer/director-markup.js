@@ -27,6 +27,7 @@
     '想': 'think', '思考': 'think',
     '瞥': 'glance', '移开视线': 'away', '盯': 'peer',
     '抬头': 'lookUp', '低头': 'lookDown',
+    '轻敲': 'typingTap', '敲键抬头': 'typingLook', '手忙脚乱': 'typingRush',
     '坏笑': 'smirk', '敷衍': 'meh', '冷汗': 'sweat', '心动': 'swoon', '摇摆': 'sway', '跺脚': 'stomp', '凑近': 'leanIn',
   }
 

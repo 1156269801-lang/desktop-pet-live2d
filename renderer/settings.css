@@ -1,20 +1,20 @@
 /* Shared shell keeps the legacy console compatible until it loads console.css. */
-html, body.settings-body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; color: var(--ui-ink, #1b2a44); font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif; }
+html, body.settings-body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; color: var(--ui-ink, #0d3a5f); font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif; }
 .settings-shell { box-sizing: border-box; width: 100%; height: 100%; display: flex; flex-direction: column; background: var(--ui-surface, #fff); border: 1px solid #c3d1ec; border-radius: 16px; overflow: hidden; }
 .settings-head { position: relative; display: flex; flex: none; align-items: center; gap: 10px; min-height: 66px; padding: 0 10px 9px 16px; color: #fff; background: var(--pet-navy, #22356f); -webkit-app-region: drag; }
 .settings-title { margin: 0; font-size: 16px; line-height: 1.35; font-weight: 650; }
 .settings-head .chat-close { -webkit-app-region: no-drag; }
 .settings-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; }
 
-/* 配色取自人物：裙子的深蓝、头发的蓝、腮红的粉。只在设置窗内覆盖共用变量。 */
-body.settings-page { --ui-ink: #1c2b5a; --ui-muted: #586a8f; --ui-accent: #2f5fd0; --ui-soft: #f0f5fd; --ui-line: #d3dff2; --ui-focus: #2f5fd0; --pet-navy: #22356f; --pet-blush: #f08fa8; }
+/* 配色取自鲸鱼娘：海洋蓝主题 + 粉色腮红点缀 */
+body.settings-page { --ui-ink: #0d3a5f; --ui-muted: #4a7ba7; --ui-accent: #1e88e5; --ui-soft: #e3f2fd; --ui-line: #b3d9f2; --ui-focus: #1e88e5; --pet-navy: #1565c0; --pet-blush: #ff9cc2; }
 /* 标题栏下沿的白色荷叶边（围裙蕾丝） */
 body.settings-page .settings-head::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 9px; background: radial-gradient(circle at 9px 9px, var(--ui-surface, #fff) 8px, transparent 8.6px) 0 0 / 18px 9px repeat-x; pointer-events: none; }
-body.settings-page .settings-avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: #dbe7fb; box-shadow: 0 0 0 2px #fff; }
+body.settings-page .settings-avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: linear-gradient(135deg, #64b5f6 0%, #1e88e5 100%); box-shadow: 0 0 0 2px #fff; }
 /* 角色图标是整身截图：放大并对准脸 */
 body.settings-page .settings-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; transform: scale(3.2); transform-origin: 50% 54%; }
 body.settings-page .settings-heading { flex: 1; min-width: 0; }
-body.settings-page .settings-character { margin: 0; color: #bccbef; font-size: 12px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.settings-page .settings-character { margin: 0; color: #b3e5fc; font-size: 12px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 body.settings-page .settings-character:empty { display: none; }
 /* 当前标签：一小段腮红色 */
 body.settings-page .settings-tabs button[aria-selected="true"]::after { content: ''; position: absolute; left: 50%; bottom: -1px; width: 28px; height: 3px; margin-left: -14px; border-radius: 3px; background: var(--pet-blush, #f08fa8); }
@@ -23,7 +23,7 @@ body.settings-page *, body.settings-page *::before, body.settings-page *::after 
 body.settings-page [hidden] { display: none !important; }
 body.settings-page :is(button, input, select, textarea, summary, label) { -webkit-app-region: no-drag; }
 body.settings-page :is(button, input, select, textarea, summary):focus-visible { outline: 2px solid var(--ui-focus, #176caa); outline-offset: 2px; }
-body.settings-page ::selection { color: var(--ui-ink, #1c2b5a); background: #d6e3fb; }
+body.settings-page ::selection { color: var(--ui-ink, #0d3a5f); background: #b3e5fc; }
 body.settings-page .settings-head .chat-close { width: 36px; height: 36px; flex: none; color: #fff; border: 1px solid transparent; border-radius: 10px; background: transparent; }
 body.settings-page .chat-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
 body.settings-page .chat-close:hover { background: rgba(255, 255, 255, 0.16); border-color: transparent; }
@@ -51,11 +51,11 @@ body.settings-page .sub-tab {
   white-space: nowrap;
   cursor: pointer;
 }
-body.settings-page .sub-tab:hover { color: var(--ui-ink, #1c2b5a); border-color: #9db2dc; }
+body.settings-page .sub-tab:hover { color: var(--ui-ink, #0d3a5f); border-color: #64b5f6; }
 body.settings-page .sub-tab.active { background: var(--pet-navy, #22356f); color: #fff; border-color: var(--pet-navy, #22356f); }
 body.settings-page .settings-tabs button { position: relative; flex: 1 1 auto; min-width: max-content; min-height: 40px; padding: 6px 8px; border: 0; border-radius: 8px 8px 0 0; background: transparent; color: var(--ui-muted, #586a8f); font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; }
-body.settings-page .settings-tabs button:hover { color: var(--ui-ink, #1c2b5a); }
-body.settings-page .settings-tabs button[aria-selected="true"] { color: var(--ui-ink, #1c2b5a); }
+body.settings-page .settings-tabs button:hover { color: var(--ui-ink, #0d3a5f); }
+body.settings-page .settings-tabs button[aria-selected="true"] { color: var(--ui-ink, #0d3a5f); }
 body.settings-page .settings-scroll { padding: 18px 20px 20px; scrollbar-gutter: stable; overscroll-behavior: contain; }
 body.settings-page .settings-panel { min-width: 0; }
 body.settings-page .settings-group { margin: 0; }

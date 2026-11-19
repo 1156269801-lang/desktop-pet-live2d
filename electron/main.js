@@ -20,7 +20,9 @@ const fs = require('node:fs')
 const http = require('node:http')
 const crypto = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
-const { extractZip } = require('./unzip')
+const { importCharacter } = require('./character-import')
+const { createKeyboardSensor } = require('./keyboard-sensor')
+const { createPresenceSensor, cameraMediaAllowed } = require('./camera-sensor')
 const { startQQGateway } = require('./qq-gateway')
 const { readVtubeHotkeys } = require('./vtube-hotkeys')
 const { toContentCursor } = require('./cursor-coordinates')
@@ -72,7 +74,11 @@ function registerVtubeHotkeys(character) {
   return ok
 }
 
-const ROOT = path.resolve(__dirname, '..')
+// electron 命名空间必须在下面计算 ROOT 之前就可用（ROOT 要读 app.isPackaged）。
+// 这里只取命名空间、不解构，避免在 app ready 之前触碰 screen / Tray 等 API。
+const electron = require('electron')
+const APP_ROOT = path.resolve(__dirname, '..')
+const ROOT = electron.app.isPackaged ? path.join(electron.app.getPath('appData'), 'DafeiyuDesktopPet') : APP_ROOT
 const TEST_HEADLESS = process.env.DAFEIYU_TEST_HEADLESS === '1'
 const APP_VERSION = 'v1.1.0'
 const APP_LABEL = '大肥鱼桌宠 · ' + APP_VERSION
@@ -95,20 +101,35 @@ function logLine(...args) {
   } catch {
     /* ignore */
   }
-  console.log(text)
+  if (!brokenConsole) {
+    try { console.log(text) } catch (error) { if (error?.code === 'EPIPE') brokenConsole = true }
+  }
 }
 
+// GUI launchers can exit while the app keeps running. A dead inherited output
+// pipe must not re-enter uncaughtException -> logLine -> dead pipe forever.
+let brokenConsole = false
+for (const stream of [process.stdout, process.stderr]) {
+  stream?.on('error', () => { brokenConsole = true })
+}
 process.on('uncaughtException', (error) => {
+  if (error?.code === 'EPIPE') { brokenConsole = true; return }
   logLine('[fatal] uncaught:', error && error.stack ? error.stack : String(error))
 })
 process.on('unhandledRejection', (reason) => {
   logLine('[fatal] unhandled rejection:', String(reason))
 })
 
-const electron = require('electron')
 const { app, BrowserWindow, ipcMain } = electron
-try { configureSandbox(app) } catch (error) {
-  logLine('[boot]', error.code || 'PLATFORM_SANDBOX_DISABLED')
+try {
+  configureSandbox(app)
+} catch (error) {
+  // 沙箱配置失败时先确保能写日志
+  try {
+    fs.mkdirSync(ROOT, { recursive: true })
+    fs.appendFileSync(LOG_PATH, new Date().toISOString() + ' [boot] ' + (error.code || 'PLATFORM_SANDBOX_DISABLED') + '\n', 'utf8')
+  } catch {}
+  console.error('[boot]', error.code || 'PLATFORM_SANDBOX_DISABLED', error.message)
   app.exit(1)
   throw error
 }
@@ -117,6 +138,14 @@ const powerMonitor = electron.powerMonitor || null
 
 // 这台机器上 %APPDATA% 下的默认 userData 会让 requestSingleInstanceLock 直接
 // abort（无 JS 异常、无 stderr），所以把运行时目录挪到应用自己的文件夹里。
+// 打包后 ROOT 指向 %APPDATA%\DafeiyuDesktopPet，必须先确保它存在。
+try {
+  fs.mkdirSync(ROOT, { recursive: true })
+} catch (error) {
+  // 如果连 ROOT 都创建不了，直接退出（此时还没有日志文件）
+  console.error('[boot] 无法创建应用数据目录:', ROOT, error.message)
+  app.exit(1)
+}
 const PROFILE_DIR = path.join(ROOT, '_profile')
 try {
   fs.mkdirSync(PROFILE_DIR, { recursive: true })
@@ -159,8 +188,8 @@ const shortcuts = () => electron.globalShortcut
 const nativeImageModule = () => electron.nativeImage
 const shellModule = () => electron.shell
 
-const RENDERER_DIR = path.join(ROOT, 'renderer')
-const ASSET_DIR = path.join(ROOT, 'assets')
+const RENDERER_DIR = path.join(APP_ROOT, 'renderer')
+const ASSET_DIR = path.join(APP_ROOT, 'assets')
 const CHARACTERS_DIR = path.join(ROOT, 'characters')
 const CONFIG_PATH = path.join(ROOT, 'config.json')
 const STATE_PATH = path.join(ROOT, 'state.json')
@@ -255,6 +284,8 @@ function writeBridge(info) {
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.wasm': 'application/wasm',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
@@ -308,7 +339,17 @@ const DEFAULT_CONFIG = {
     maxTokens: 400,
   },
   control: { port: 41968 },
+  asr: {
+    enabled: true,
+    mode: 'auto',
+    url: 'http://127.0.0.1:8000/v1/audio/transcriptions',
+    model: 'sensevoice',
+    language: 'zh',
+    apiKey: '',
+    maxSeconds: 60,
+  },
   watch: { enabled: false, intervalMs: 75000, maxSilenceMs: 240000, vision: false },
+  keyboard: { enabled: true, sensitivity: 35 },
   // QQ 接入（OneBot 11 正向 WS）：enabled 打开后才连接
   qq: {
     enabled: false,
@@ -339,7 +380,7 @@ const DEFAULT_CONFIG = {
 function mergeConfig(raw) {
   const source = raw && typeof raw === 'object' ? raw : {}
   const merged = { ...DEFAULT_CONFIG, ...source }
-  for (const key of ['window', 'llm', 'control', 'watch', 'qq', 'tts', 'debug']) {
+  for (const key of ['window', 'llm', 'control', 'asr', 'watch', 'keyboard', 'qq', 'tts', 'debug']) {
     merged[key] = { ...DEFAULT_CONFIG[key], ...(source[key] || {}) }
   }
   return merged
@@ -486,91 +527,25 @@ const DEFAULT_SPEECH = [
   '今天的你也在偷懒吧。',
 ]
 
-/** 递归找 .model3.json（压缩包里常常多套一层目录） */
-function findModelFiles(dir, out = [], depth = 0) {
-  if (depth > 8) return out
-  let entries = []
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true })
-  } catch {
-    return out
-  }
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) findModelFiles(full, out, depth + 1)
-    // 注意：模型文件可能就叫 model3.json（没有前缀点），别写成 \.model3\.json
-    else if (/model3\.json$/i.test(entry.name)) out.push(full)
-  }
-  return out
+function registerModelDropGuard(win) {
+  win.webContents.on('will-navigate', (event) => event.preventDefault())
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 }
 
-function sanitizeCharacterId(raw) {
-  let id = String(raw || '')
-    .trim()
-    .replace(/[<>:"|?*\u0000-\u001f]/g, '')
-    .replace(/[\\/]+/g, '-')
-  if (!id) id = 'character-' + Date.now()
-  return id.slice(0, 60)
-}
-
-/** 解压 → 找模型 → 生成 manifest → 返回可以直接用的角色对象 */
-function importCharacterFromZip(zipPath) {
-  const stat = fs.statSync(zipPath)
-  if (!stat.isFile()) throw new Error('这不是文件')
-  if (!/\.zip$/i.test(zipPath)) throw new Error('只支持 .zip 压缩包')
-
-  fs.mkdirSync(CHARACTERS_DIR, { recursive: true })
-  const baseName = path.basename(zipPath, path.extname(zipPath))
-  const seed = sanitizeCharacterId(baseName)
-
-  let id = seed
-  let target = path.join(CHARACTERS_DIR, id)
-  let suffix = 2
-  while (fs.existsSync(target)) {
-    id = sanitizeCharacterId(seed + '-' + suffix)
-    target = path.join(CHARACTERS_DIR, id)
-    suffix += 1
+function handleCharacterImport(event, win, route, payload) {
+  if (!win || event.sender !== win.webContents || event.senderFrame?.url !== 'http://127.0.0.1:' + controlPort + route) {
+    return { ok: false, error: '不允许从当前窗口导入' }
   }
-
-  fs.mkdirSync(target, { recursive: true })
   try {
-    const result = extractZip(zipPath, target)
-    const topLevel = (() => {
-      try {
-        return fs.readdirSync(target)
-      } catch {
-        return []
-      }
-    })()
-    logLine('[pet] 解压完成 files=', result.files, '顶层=', JSON.stringify(topLevel))
-    const models = findModelFiles(target)
-    if (models.length === 0) {
-      logLine('[pet] 扫描模型结果为 0，目录树：', JSON.stringify(topLevel))
-      throw new Error('压缩包里没找到 .model3.json')
-    }
-
-    const modelRel = path.relative(target, models[0]).split(path.sep).join('/')
-    const manifest = {
-      id,
-      name: baseName || id,
-      model: modelRel,
-      defaultScale: { x: 1, y: 1 },
-      speech: DEFAULT_SPEECH.slice(),
-      expressions: {},
-    }
-    fs.writeFileSync(path.join(target, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8')
-
-    const character = readCharacter(id)
-    if (!character) throw new Error('模型文件不完整（manifest 校验没通过）')
-    logLine('[pet] 导入角色:', id, 'files=', result.files, 'model=', modelRel)
-    return { character, files: result.files }
+    const source = typeof payload?.path === 'string' ? payload.path : ''
+    const { character, files } = importCharacter(source, CHARACTERS_DIR, DEFAULT_SPEECH, readCharacter)
+    state.character = character.id
+    saveState()
+    pushToPet({ type: 'character', character })
+    registerVtubeHotkeys(character)
+    return { ok: true, character, files }
   } catch (error) {
-    try {
-      fs.rmSync(target, { recursive: true, force: true })
-    } catch {
-      /* ignore */
-    }
-    throw error
+    return { ok: false, error: error.code === 'ENOENT' ? '文件或文件夹不存在' : error.message }
   }
 }
 
@@ -636,7 +611,7 @@ async function replyAsPet(userText, scene, { allowMemory = false } = {}) {
   const result = await director.preview({ text: userText, remote: true }, { allowMemory })
   if (!result.ok) throw new Error(result.error || '导演请求失败')
   // 台词里的〔表演标记〕只给主窗用；聊天窗和 QQ 拿到的是纯文字
-  return { say: stripMarkup(result.plan.speech) || '……', say_ja: result.plan.speech_ja || '', emotion: 'none', motion: 'none' }
+  return { say: stripMarkup(result.plan.speech) || '……', say_ja: config.tts?.sayLanguage === 'ja' ? (result.plan.speech_ja || '') : '', emotion: 'none', motion: 'none' }
 }
 
 /**
@@ -714,6 +689,15 @@ function sceneText(observed) {
 // ------------------------------------------------------------------- to page
 
 let mainWindow = null
+const keyboardSensor = createKeyboardSensor((strength) => {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized()) {
+    pushToPet({ type: 'keyboard-strength', strength })
+  }
+})
+function syncKeyboard() {
+  keyboardSensor.setEnabled(!TEST_HEADLESS && config.keyboard.enabled === true && config.keyboard.sensitivity > 0)
+  pushToPet({ type: 'keyboard-preferences', preferences: config.keyboard })
+}
 let chatWindow = null
 let panelWindow = null
 let tray = null
@@ -744,10 +728,10 @@ let clickThrough = true
 function applyClickThrough(ignore) {
   clickThrough = Boolean(ignore)
   if (mainWindow && !mainWindow.isDestroyed()) {
-    // forward 只对「ignore 为 true」有意义：让被穿透的窗口仍转发 mousemove。
-    // 恢复可点时必须传空 options —— 带 forward 会在 Windows 侧留下转发钩子，
-    // 结果是 mousemove 照常收到、点击却被转发到下层窗口，表现成「点不动、拖不动」。
-    if (clickThrough) mainWindow.setIgnoreMouseEvents(true, { forward: true })
+    // Use the existing 60ms cursor poll for transparent-window hit testing.
+    // Avoid forward:true: its Windows global mouse forwarding duplicates the
+    // polling path and can stall high-rate mouse input.
+    if (clickThrough) mainWindow.setIgnoreMouseEvents(true)
     else mainWindow.setIgnoreMouseEvents(false)
     pushToPet({ type: 'click-through-state', ignore: clickThrough })
   }
@@ -849,7 +833,10 @@ function invalidateCapabilities() {
 }
 
 function pushToPet(payload) {
-  if (payload && payload.type === 'character') invalidateCapabilities()
+  if (payload && payload.type === 'character') {
+    invalidateCapabilities()
+    if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('settings:characters-changed')
+  }
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('pet:event', payload)
 }
 
@@ -996,16 +983,21 @@ function readTtsRefText() {
   return ttsRefTextCache
 }
 
+async function asrTranscribe(input) {
+  return require('./asr-client').transcribeAudio(config.asr || {}, input)
+}
+
 async function ttsSynthesize(text, lang) {
   const tts = config.tts || {}
   if (tts.enabled === false) return ''
+  if (tts.engine === 'system') return require('./system-tts').synthesize(text, tts.voice || '')
   const say = String(text || '').slice(0, 500)
   if (!say) return ''
   const payload = {
     text: say,
     text_lang: lang || tts.lang || 'zh',
     ref_audio_path: tts.refAudio || 'D:/GPT-SoVITS/ref_audio/idle50.wav',
-    prompt_text: readTtsRefText(),
+    prompt_text: typeof tts.refText === 'string' && tts.refText.trim() ? tts.refText : readTtsRefText(),
     prompt_lang: tts.refLang || 'ja',
     streaming_mode: false,
     media_type: 'wav',
@@ -1014,6 +1006,8 @@ async function ttsSynthesize(text, lang) {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(45000),
+    redirect: 'error',
   })
   if (!response.ok) throw new Error('TTS HTTP ' + response.status)
   const buf = Buffer.from(await response.arrayBuffer())
@@ -1029,6 +1023,26 @@ ipcMain.on('pet:lip-sync', (event, payload) => {
     pushToPet(envelope ? { type: 'lip-sync', envelope } : { type: 'lip-sync', stop: true })
   } catch {
     /* 口型失败不影响语音 */
+  }
+})
+
+ipcMain.handle('pet:asr-config', () => ({
+  ok: true,
+  enabled: config.asr?.enabled !== false,
+  mode: config.asr?.mode || 'auto',
+  url: config.asr?.url || '',
+  language: config.asr?.language || 'zh',
+  maxSeconds: Math.max(3, Math.min(120, Number(config.asr?.maxSeconds) || 60)),
+}))
+
+ipcMain.handle('pet:asr-transcribe', async (event, input) => {
+  if (!chatWindow || chatWindow.isDestroyed() || event.sender !== chatWindow.webContents
+    || event.senderFrame !== chatWindow.webContents.mainFrame) return { ok: false, error: '请从聊天窗使用语音输入' }
+  try {
+    const text = await asrTranscribe(input || {})
+    return { ok: true, text }
+  } catch (error) {
+    return { ok: false, error: error.message }
   }
 })
 
@@ -1082,7 +1096,14 @@ function createWindow() {
   // 用 floating 而不是 screen-saver：后者会盖在任务栏右键菜单之上，光标来回跳
   mainWindow.setAlwaysOnTop(true, 'floating')
   // 默认整块穿透：桌面和其它窗口照常可点，只有鼠标移到角色/面板上才临时关掉
-  mainWindow.setIgnoreMouseEvents(true, { forward: true })
+  mainWindow.setIgnoreMouseEvents(true)
+  registerModelDropGuard(mainWindow)
+  mainWindow.webContents.on('before-input-event', (_event, input) => keyboardSensor.focusedInput(input))
+  mainWindow.webContents.on('did-finish-load', syncKeyboard)
+  mainWindow.webContents.on('did-start-navigation', (_event, _url, _inPlace, mainFrame) => {
+    if (mainFrame && cameraAllowed) stopCamera()
+  })
+  mainWindow.webContents.on('render-process-gone', () => stopCamera())
   mainWindow.loadURL('http://127.0.0.1:' + controlPort + '/')
   mainWindow.on('page-title-updated', (event) => {
     event.preventDefault()
@@ -1127,6 +1148,7 @@ function createWindow() {
   })
   mainWindow.on('closed', () => {
     mainWindow = null
+    stopCamera()
   })
 
   if (Number(config.debug.captureAfterMs) > 0) {
@@ -1234,7 +1256,9 @@ function createTray() {
 // -------------------------------------------------------------- http service
 
 async function serveStatic(base, filePath, res) {
-    const data = await readStaticAsset(ROOT, base, filePath)
+    const modelAsset = /^\.(?:json|moc3|png|jpe?g|webp|gif|svg|wav|mp3|ogg|webm|meta)$/i.test(path.extname(filePath))
+    const data = base === CHARACTERS_DIR && !modelAsset ? null
+      : await readStaticAsset(base === CHARACTERS_DIR ? ROOT : APP_ROOT, base, filePath)
     if (!data) {
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
       res.end('not found')
@@ -1244,6 +1268,7 @@ async function serveStatic(base, filePath, res) {
       'content-type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
       'cache-control': 'no-store',
       'x-content-type-options': 'nosniff',
+      ...(base === CHARACTERS_DIR ? { 'content-security-policy': "sandbox; default-src 'none'" } : {}),
     })
     res.end(data)
 }
@@ -1669,7 +1694,7 @@ const winSize = mainWindow.getContentBounds()
       }
       // 编舞采样器与引擎给渲染进程加载
       if (relative.startsWith('/engine/')) {
-        base = path.join(ROOT, 'engine')
+        base = path.join(APP_ROOT, 'engine')
         relative = relative.slice('/engine'.length)
       }
       const target = path.resolve(base, '.' + relative)
@@ -1799,22 +1824,7 @@ ipcMain.handle('pet:switch-character', (_event, id) => {
   return { ok: true, character }
 })
 
-ipcMain.handle('pet:import-character', (_event, payload) => {
-  try {
-    const filePath = String((payload && payload.path) || '').trim()
-    if (!filePath) return { ok: false, error: '没有收到文件路径' }
-    if (!fs.existsSync(filePath)) return { ok: false, error: '文件不存在：' + filePath }
-    const { character, files } = importCharacterFromZip(filePath)
-    state.character = character.id
-    saveState()
-    pushToPet({ type: 'character', character })
-    registerVtubeHotkeys(character)
-    return { ok: true, character, files }
-  } catch (error) {
-    logLine('[pet] 导入失败:', error.message)
-    return { ok: false, error: error.message }
-  }
-})
+ipcMain.handle('pet:import-character', (event, payload) => handleCharacterImport(event, mainWindow, '/', payload))
 
 /**
  * 切换角色后截一张"头肩"图当缩略图：纹理图集看不出角色长相，
@@ -1877,7 +1887,7 @@ ipcMain.handle('pet:state', () => ({
 // ------------------------------------------------- 编舞（语义计划 → 参数轨道）
 
 // 编舞引擎模块在 engine/，规划器在 electron/（同属主进程，按真实位置加载）
-const choreoRequire = (name) => require(path.join(ROOT, 'engine', name))
+const choreoRequire = (name) => require(path.join(APP_ROOT, 'engine', name))
 const choreoElectronRequire = (name) => require(path.join(__dirname, name))
 let choreoProfile = null
 let choreoProfileKey = ''
@@ -2273,6 +2283,7 @@ if (!singleInstance) {
   })
 
   app.whenReady().then(async () => {
+  installMediaPermissionPolicy(electron.session.defaultSession)
   // C2：开机算一次「多久没互动」的衰减
   try {
     decayAffinity()
@@ -2283,7 +2294,11 @@ if (!singleInstance) {
   try {
     if (powerMonitor) {
       for (const [native, event] of [['lock-screen', 'lock'], ['suspend', 'suspend'], ['shutdown', 'shutdown'], ['resume', 'resume'], ['unlock-screen', 'unlock']]) {
-        powerMonitor.on(native, () => { director.systemEvent(event); if (event === 'resume' || event === 'unlock') recoverAfterWake(event) })
+        powerMonitor.on(native, () => {
+          if (['lock', 'suspend', 'shutdown'].includes(event)) stopCamera()
+          director.systemEvent(event)
+          if (event === 'resume' || event === 'unlock') recoverAfterWake(event)
+        })
       }
     }
   } catch (error) {
@@ -2345,8 +2360,9 @@ if (!singleInstance) {
     /* 桌宠常驻托盘，这里不退出 */
   })
 
-  app.on('before-quit', () => { director.shutdown(); rememberWindowBounds({flush:true}) })
+  app.on('before-quit', () => { stopCamera(); director.shutdown(); rememberWindowBounds({flush:true}) })
   app.on('will-quit', () => {
+    keyboardSensor.stop()
     if (windowSaveTimer) clearTimeout(windowSaveTimer)
     if (watchTimer) clearInterval(watchTimer)
     if (cursorTimer) clearInterval(cursorTimer)
@@ -2379,6 +2395,66 @@ if (!singleInstance) {
 // --------------------------------------------------- 独立设置窗口（多窗口）
 
 let settingsWindow = null
+let cameraAllowed = false, cameraTimeout = null, lastCameraSample = -Infinity
+let cameraStatus = { status: 'off' }
+const presenceSensor = createPresenceSensor({ onChange: (event) => director.cameraPresence(event) })
+
+function installMediaPermissionPolicy(session) {
+  const allow = (contents, isMainFrame, url, origin, types) => cameraMediaAllowed({
+    contents, petContents: mainWindow?.webContents, chatContents: chatWindow?.webContents, port: controlPort,
+    allowed: cameraAllowed, isMainFrame, url, origin, types,
+  })
+  session.setPermissionRequestHandler((contents, permission, callback, details) => {
+    callback(permission === 'media' && allow(contents, details.isMainFrame, details.requestingUrl, details.securityOrigin, details.mediaTypes))
+  })
+  session.setPermissionCheckHandler((contents, permission, origin, details) => permission === 'media'
+    && allow(contents, details.isMainFrame, details.requestingUrl, origin, [details.mediaType]))
+}
+
+function publishCamera(status, message) {
+  cameraStatus = { status, message }
+  if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send('camera:state', cameraStatus)
+  return cameraStatus
+}
+
+function stopCamera(message) {
+  const wasAllowed = cameraAllowed
+  cameraAllowed = false
+  clearTimeout(cameraTimeout); cameraTimeout = null
+  presenceSensor.setEnabled(false)
+  if (wasAllowed) pushToPet({ type: 'camera-control', enabled: false })
+  return publishCamera(message ? 'error' : 'off', message)
+}
+
+const cameraFailure = '摄像头视觉无法启动：请检查系统权限、设备是否被占用，以及模型和运行库文件是否完整。'
+const fromCameraWindow = (event, win, route) => win && !win.isDestroyed() && event.sender === win.webContents
+  && event.senderFrame === win.webContents.mainFrame && event.senderFrame.url === 'http://127.0.0.1:' + controlPort + route
+
+ipcMain.handle('camera:state', (event) => fromCameraWindow(event, settingsWindow, '/settings.html') ? cameraStatus : { status: 'off' })
+ipcMain.handle('camera:set', (event, enabled) => {
+  if (!fromCameraWindow(event, settingsWindow, '/settings.html') || typeof enabled !== 'boolean') return { status: 'off' }
+  if (!enabled) return stopCamera()
+  if (cameraAllowed) return cameraStatus
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isLoadingMainFrame()) return stopCamera('主窗尚未就绪，请稍后再试。')
+  if (!fs.existsSync(path.join(ASSET_DIR, 'mediapipe', 'blaze_face_short_range.tflite'))) return stopCamera('未找到 BlazeFace 模型，摄像头视觉未启用。')
+  cameraAllowed = true
+  lastCameraSample = -Infinity
+  cameraTimeout = setTimeout(() => stopCamera(cameraFailure), 30000)
+  pushToPet({ type: 'camera-control', enabled: true })
+  return publishCamera('starting', '正在启动本地人脸检测…')
+})
+ipcMain.on('camera:report', (event, payload) => {
+  if (!cameraAllowed || !fromCameraWindow(event, mainWindow, '/')) return
+  if (payload?.type === 'error') { stopCamera(cameraFailure); return }
+  if (payload?.type === 'on' && cameraStatus.status === 'starting') {
+    clearTimeout(cameraTimeout); cameraTimeout = null
+    presenceSensor.setEnabled(true)
+    publishCamera('on', '摄像头已开启。画面仅在本机内存检测。')
+  } else if (payload?.type === 'sample' && cameraStatus.status === 'on' && Date.now() - lastCameraSample >= 800) {
+    lastCameraSample = Date.now()
+    presenceSensor.sample(payload.count)
+  }
+})
 const director = createDirector({ root: ROOT, config, legacyPersona, saveConfig: saveDirectorConfig,
   sense: senseForDirector,
   senseManual: async ({ title, screenshot, signal }) => {
@@ -2392,6 +2468,27 @@ const director = createDirector({ root: ROOT, config, legacyPersona, saveConfig:
   getDisplays: () => screenModule().getAllDisplays().map(d => ({ id: d.id, bounds: d.bounds })),
   getSettingsUrl: () => 'http://127.0.0.1:' + controlPort + '/settings.html',
   getWindow: () => mainWindow, getSettingsWindow: () => settingsWindow, send: pushToPet, ipcMain })
+
+const quickSetup = require('./quick-setup').createQuickSetup({ root: ROOT, config, director,
+  saveConfig: saveDirectorConfig, synthesize: ttsSynthesize })
+for (const [channel, operation] of Object.entries({
+  'quick:state': () => quickSetup.state(),
+  'quick:start-asr': () => quickSetup.startAsr(),
+  'quick:save-voice': body => quickSetup.saveVoice(body),
+  'quick:test-voice': () => quickSetup.testVoice(),
+  'quick:detect-voice': () => quickSetup.detectVoice(),
+  'quick:start-tts': () => quickSetup.startTts(),
+  'quick:pick-reference': async () => {
+    const result = await electron.dialog.showOpenDialog(settingsWindow, { title: '选择参考音频', properties: ['openFile'], filters: [{ name: '音频文件', extensions: ['wav','mp3','flac','ogg','m4a'] }] })
+    return result.canceled ? { ok: true, canceled: true } : { ok: true, path: result.filePaths[0] }
+  },
+})) {
+  ipcMain.handle(channel, async (event, body) => {
+    if (!settingsWindow || settingsWindow.isDestroyed() || event.sender !== settingsWindow.webContents
+      || event.senderFrame !== settingsWindow.webContents.mainFrame) return { ok: false, error: '请从设置窗口操作' }
+    try { return await operation(body) } catch { return { ok: false, error: '操作失败，请稍后刷新重试' } }
+  })
+}
 
 function createSettingsWindow(preloadOnly = false) {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
@@ -2429,6 +2526,8 @@ function createSettingsWindow(preloadOnly = false) {
     },
   })
   settingsWindow.setAlwaysOnTop(true, 'floating')
+  registerModelDropGuard(settingsWindow)
+  settingsWindow.webContents.on('before-input-event', (_event, input) => keyboardSensor.focusedInput(input))
   settingsWindow.loadURL('http://127.0.0.1:' + controlPort + '/settings.html')
   settingsWindow.once('ready-to-show', () => {
     if (!TEST_HEADLESS && !preloadOnly) settingsWindow.show()
@@ -2507,6 +2606,14 @@ ipcMain.on('settings:close', () => {
 
 // 设置窗口发出的操作 → 转给主窗口执行（模型在那边）
 ipcMain.on('settings:command', (_event, payload) => {
+  if (payload?.cmd === 'keyboardEnabled' || payload?.cmd === 'keyboardSensitivity') {
+    if (!settingsWindow || _event.sender !== settingsWindow.webContents || _event.senderFrame?.url !== 'http://127.0.0.1:' + controlPort + '/settings.html') return
+    if (payload.cmd === 'keyboardEnabled' && typeof payload.value === 'boolean') config.keyboard.enabled = payload.value
+    if (payload.cmd === 'keyboardSensitivity' && Number.isFinite(payload.value)) config.keyboard.sensitivity = Math.min(100, Math.max(0, payload.value))
+    syncKeyboard()
+    writeJson(CONFIG_PATH, config)
+    return
+  }
   // 说话语言持久化到 config
   if (payload && payload.cmd === 'ttsSayLanguage' && (payload.value === 'ja' || payload.value === 'zh')) {
     config.tts.sayLanguage = payload.value
@@ -2528,6 +2635,7 @@ ipcMain.handle('settings:state', () => ({
   ...windowGeometryState(),
   characters: listCharacters().map((item) => ({ id: item.id, name: item.name, preview: item.preview || '' })),
   tts: config.tts,
+  keyboard: config.keyboard,
 }))
 
 ipcMain.handle('settings:characters', () => ({
@@ -2545,22 +2653,7 @@ ipcMain.handle('settings:switch', (_event, id) => {
   return { ok: true, character }
 })
 
-ipcMain.handle('settings:import', (_event, payload) => {
-  try {
-    const filePath = String((payload && payload.path) || '').trim()
-    if (!filePath) return { ok: false, error: '没有收到文件路径' }
-    if (!fs.existsSync(filePath)) return { ok: false, error: '文件不存在：' + filePath }
-    const { character, files } = importCharacterFromZip(filePath)
-    state.character = character.id
-    saveState()
-    pushToPet({ type: 'character', character })
-    registerVtubeHotkeys(character)
-    return { ok: true, character, files }
-  } catch (error) {
-    logLine('[pet] 设置窗口导入失败:', error.message)
-    return { ok: false, error: error.message }
-  }
-})
+ipcMain.handle('settings:import', (event, payload) => handleCharacterImport(event, settingsWindow, '/settings.html', payload))
 
 // --------------------------------------------------- 独立动作控制台窗口
 
@@ -2644,6 +2737,7 @@ function createChatWindow() {
     },
   })
   chatWindow.setAlwaysOnTop(true, 'floating')
+  chatWindow.webContents.on('before-input-event', (_event, input) => keyboardSensor.focusedInput(input))
   chatWindow.loadURL('http://127.0.0.1:' + controlPort + '/chat.html')
   chatWindow.once('ready-to-show', () => chatWindow.show())
   chatWindow.on('closed', () => {

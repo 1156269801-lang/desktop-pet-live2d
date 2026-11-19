@@ -1,8 +1,8 @@
 /**
  * 右臂手势的保守二维联动（jingyu arm_binding.py 的 JS 移植）。
  *
- * 原文：D:\大肥鱼桌宠归档\02-文档\jingyu参考源码\arm_binding.py（48 行）
- *       D:\大肥鱼桌宠归档\02-文档\jingyu参考源码\arm-binding.md
+ * 原文：jingyu-live2d-agent 仓库的 code/arm_binding.py（48 行）与同目录 arm-binding.md
+ *       https://github.com/InariNGT-Ofiicial/jingyu-live2d-agent
  *
  * 与 jingyu 的关系（必读）：
  * - jingyu 的 bind 作用于「作者已有曲线」。本项目没有作者曲线，compiler 用

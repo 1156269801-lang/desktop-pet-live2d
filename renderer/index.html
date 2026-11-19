@@ -12,6 +12,7 @@
     <main class="stage" id="stage">
       <div id="sceneBackground" class="scene-background" aria-hidden="true"></div>
       <canvas id="view"></canvas>
+      <button type="button" id="modelDropHint" class="model-drop-hint">拖入模型文件夹或 ZIP，也可点击打开设置</button>
       <button type="button" class="menu-button" id="menuButton" hidden title="快捷菜单（可拖动）" aria-label="打开快捷菜单" aria-controls="panel" aria-expanded="false"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
       <div id="bubble" class="bubble" hidden>
         <div class="bubble-text" id="bubbleText" tabindex="0" role="status" aria-live="polite"></div>
@@ -97,6 +98,11 @@
   <script src="lip-sync.js"></script>
   <script src="liveliness.js"></script>
   <script src="acting.js"></script>
+  <script src="keyboard-reaction.js"></script>
+  <div id="cameraIndicator" class="camera-indicator" hidden>摄像头检测中</div>
+  <script src="camera-sensor.js"></script>
+  <link rel="stylesheet" href="model-drop.css" />
+  <script src="model-drop.js"></script>
   <script src="pet.js"></script>
 </body>
 </html>

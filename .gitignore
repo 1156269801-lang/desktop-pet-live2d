@@ -1,5 +1,9 @@
 # 运行时与隐私（不提交）
 node_modules/
+dist/
+_asr/
+.serena/
+__pycache__/
 characters/
 _private/
 _integration/
@@ -14,6 +18,26 @@ _pet.lock
 *.bak3
 *.bak4
 *.bak5
+
+# 密钥与本地凭据
+.env
+.env.*
+*.key
+*.pem
+secret*.json
+auth.json
+*.credential
+
+# 本地开发工具（内含本机绝对路径，不对外）
+pnpm.cmd
+pnpm-workspace.yaml
+
+# 内部工作记录（含本机路径、调试过程，不随仓库发布）
+调试-*.md
+验收报告-*.md
+AGENTS.md
+docs/安装包验收.md
+tools/
 
 # 系统
 .DS_Store

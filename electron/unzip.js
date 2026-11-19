@@ -25,11 +25,12 @@ function readZipEntries(buffer) {
   if (eocd < 0) throw new Error('不是有效的 zip 文件（找不到目录结尾）')
 
   const entryCount = buffer.readUInt16LE(eocd + 10)
+  if (buffer.readUInt16LE(eocd + 4) || buffer.readUInt16LE(eocd + 6)) throw new Error('不支持分卷 ZIP')
   let offset = buffer.readUInt32LE(eocd + 16)
   const entries = []
 
   for (let i = 0; i < entryCount; i += 1) {
-    if (buffer.readUInt32LE(offset) !== 0x02014b50) break
+    if (offset + 46 > eocd || buffer.readUInt32LE(offset) !== 0x02014b50) throw new Error('ZIP 目录损坏')
     const flags = buffer.readUInt16LE(offset + 8)
     const method = buffer.readUInt16LE(offset + 10)
     const compressedSize = buffer.readUInt32LE(offset + 20)
@@ -43,6 +44,7 @@ function readZipEntries(buffer) {
     // bit 11 = 文件名是 UTF-8
     const name = flags & 0x800 ? rawName.toString('utf8') : decodeCp437(rawName)
 
+    if (flags & 1) throw new Error('不支持加密 ZIP')
     entries.push({ name, method, compressedSize, uncompressedSize, localOffset })
     offset += 46 + nameLength + extraLength + commentLength
   }
@@ -69,26 +71,32 @@ function extractEntry(buffer, entry, targetPath) {
 
   let data
   if (entry.method === 0) data = raw
-  else if (entry.method === 8) data = zlib.inflateRawSync(raw)
+  else if (entry.method === 8) data = zlib.inflateRawSync(raw, { maxOutputLength: Math.max(1, entry.uncompressedSize) })
   else throw new Error('不支持的压缩方式 ' + entry.method + ': ' + entry.name)
+  if (raw.length !== entry.compressedSize || data.length !== entry.uncompressedSize) throw new Error('ZIP 文件大小与目录不一致')
 
   fs.mkdirSync(path.dirname(targetPath), { recursive: true })
-  fs.writeFileSync(targetPath, data)
+  fs.writeFileSync(targetPath, data, { flag: 'wx' })
 }
 
 /** 把 zip 解到 outDir（会做路径穿越防护） */
-function extractZip(zipPath, outDir) {
+function extractZip(zipPath, outDir, { maxFiles, maxBytes, maxFile, safePart }) {
+  if (fs.statSync(zipPath).size > maxBytes) throw new Error('ZIP 文件过大')
   const buffer = fs.readFileSync(zipPath)
   const entries = readZipEntries(buffer)
   const root = path.resolve(outDir)
-  let files = 0
+  let files = 0, total = 0
+  if (entries.length > maxFiles) throw new Error('ZIP 文件条目过多')
 
   for (const entry of entries) {
     const safeName = entry.name.replace(/\\/g, '/')
-    if (!safeName || safeName.endsWith('/')) continue // 目录条目
+    if (safeName.endsWith('/')) continue // 目录条目
+    if (!safeName.split('/').every(safePart)) throw new Error('ZIP 中包含不安全的路径')
     const target = path.resolve(root, safeName)
     // 防 zip slip：不允许解到 outDir 外面
-    if (!target.startsWith(root + path.sep)) continue
+    if (!target.startsWith(root + path.sep)) throw new Error('ZIP 中包含越界路径')
+    total += entry.uncompressedSize
+    if (total > maxBytes || entry.uncompressedSize > maxFile) throw new Error('解压体积超过限制')
     extractEntry(buffer, entry, target)
     files += 1
   }

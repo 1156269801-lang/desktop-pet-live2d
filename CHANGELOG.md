@@ -1,5 +1,21 @@
 # 更新说明
 
+## v1.1.0 工作区增强（未发布）
+
+- 修复启动崩溃：`electron/main.js` 在 `const electron = require('electron')` 声明之前读取 `electron.app.isPackaged`（TDZ），导致主进程加载即抛 `ReferenceError: Cannot access 'electron' before initialization`。源码版表现为弹出 Error 窗口，打包版表现为静默闪退（退出码 `0x80000003`）。现已在计算 `ROOT` 之前引入 electron 命名空间。
+- Windows：新增 NSIS 安装包构建；安装版使用独立用户数据目录，不携带本地模型、语音、配置或密钥。
+- 角色：主窗和设置窗支持拖入 Live2D 模型文件夹或 ZIP，导入后刷新列表并切换角色。
+- 表演：按键强度驱动轻敲、抬头与手忙脚乱，支持关闭和调整灵敏度，不记录按键内容。
+- 陪伴：新增默认关闭的摄像头视觉；启用后，本机检测到有人、离开或返回时显示对应气泡，不保存画面、不上传。
+
+## 工作区本地 ASR 补丁
+
+- 聊天窗新增点击开始/停止录音与取消按钮，Escape 可取消；处理授权晚返回、重复提交和关窗清理
+- 主进程新增本地 HTTP ASR 适配：兼容 OpenAI `/audio/transcriptions` 以及 `{text}` / `{transcript}` / `{result}` 返回
+- 转写结果复用现有 `pet.send()`，继续进入导演、TTS 和 Live2D 口型链路
+- 默认 ASR 地址为 `http://127.0.0.1:8000/v1/audio/transcriptions`，录音上限 60 秒
+
+
 ## v1.1.0（当前）
 
 第一个在仓库发布的正式版。重点是让她「会演」：说话对口型、带动作，情绪有对应的脸和身体姿态。
