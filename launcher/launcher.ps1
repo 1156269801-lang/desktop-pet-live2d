@@ -6,6 +6,18 @@ Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 
 function Color([string]$Hex) { [Drawing.ColorTranslator]::FromHtml($Hex) }
 
+function ToColor($v) {
+    # 只认合法 hex（#RRGGBB 或 #RRGGBBAA）。实测有控件的 Tag 被设成 '—' 之类的文本，
+    # 直接丢给 FromHtml 会抛 Int32 转换异常，把整个 Paint 拖垮。
+    if ($null -eq $v) { return [Drawing.Color]::Transparent }
+    if ($v -is [Drawing.Color]) { return $v }
+    $s = ([string]$v).Trim()
+    if ($s -match '^#?[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$') {
+        try { return [Drawing.ColorTranslator]::FromHtml($s) } catch { }
+    }
+    return [Drawing.Color]::Transparent
+}
+
 # ===== 主题切换 =====
 $Theme = 'Light'   # 'Light' | 'Dark'
 
@@ -160,13 +172,18 @@ function Button-Skin($Control,$Fill) {
 function Button($Parent,[string]$Text,[int]$X,[int]$Y,[int]$W,[int]$H,$Fill=$card,$Outline=$null,[switch]$Rounded) {
     $button = New-Object Windows.Forms.Button
     $button.Text = $Text; $button.FlatStyle = 'Flat'; $button.FlatAppearance.BorderSize = 0
-    $button.Tag=@{Key=$null;Fill=$Fill;Over=$Fill;Down=$Fill}; Button-Skin $button $Fill
-    $button.ForeColor=if($Fill -eq $accent){$logBg}else{$white}; $button.UseVisualStyleBackColor = $false
-    if($null -ne $Outline){$button.FlatAppearance.BorderSize=1; $button.FlatAppearance.BorderColor=$Outline; $button.ForeColor=$Outline}
-    # hover / active 状态标记，供内阴影绘制使用
-    $button.Add_MouseEnter({param($sender,$eventArgs) if($sender.Enabled){$sender.Tag.Hover=$true; $sender.BackColor=$sender.Tag.Over; $sender.Invalidate()}})
-    $button.Add_MouseLeave({param($sender,$eventArgs) $sender.Tag.Hover=$false; $sender.Tag.Active=$false; $sender.BackColor=$sender.Tag.Fill; $sender.Invalidate()})
-    # 内阴影：hover 时顶部 1px 高光 + 底部 1px 暗线，按下时反转为内凹
+    $button.Tag=@{Key=$null;Fill=$Fill;Over=$Fill;Down=$Fill;Hover=$false;Active=$false}
+    Button-Skin $button $Fill
+    $button.ForeColor=if($Fill -eq $accent){$logBg}else{$white}
+    $button.UseVisualStyleBackColor = $false
+    if($null -ne $Outline){ $button.ForeColor=$Outline }
+
+    $button.Add_MouseEnter({param($sender,$eventArgs)
+        if($sender.Enabled){ $sender.Tag.Hover=$true; $sender.BackColor=$sender.Tag.Over; $sender.Invalidate() }})
+    $button.Add_MouseLeave({param($sender,$eventArgs)
+        $sender.Tag.Hover=$false; $sender.Tag.Active=$false
+        $sender.BackColor=$sender.Tag.Fill; $sender.Invalidate() })
+    # hover 内阴影：顶部高光 + 底部暗线；按下时反转成内凹
     $button.Add_Paint({param($sender,$eventArgs)
         if (-not $sender.Tag.Hover) { return }
         $g = $eventArgs.Graphics; $g.SmoothingMode = 'AntiAlias'
@@ -183,14 +200,21 @@ function Button($Parent,[string]$Text,[int]$X,[int]$Y,[int]$W,[int]$H,$Fill=$car
             $g.DrawLine($bot, 10, $h - 2, $w - 11, $h - 2)
         } finally { $top.Dispose(); $bot.Dispose() }
     })
-    $button.Add_MouseDown({param($sender,$eventArgs) if($sender.Enabled -and $eventArgs.Button -eq 'Left'){$sender.Tag.Active=$true; $sender.BackColor=$sender.Tag.Down; $sender.Invalidate()}})
-    $button.Add_MouseUp({param($sender,$eventArgs) if($sender.Enabled){$sender.BackColor=$sender.Tag.Over}})
+    $button.Add_MouseDown({param($sender,$eventArgs)
+        if($sender.Enabled -and $eventArgs.Button -eq 'Left'){ $sender.Tag.Active=$true; $sender.BackColor=$sender.Tag.Down; $sender.Invalidate() }})
+    $button.Add_MouseUp({param($sender,$eventArgs)
+        if($sender.Enabled){ $sender.Tag.Active=$false; $sender.BackColor=$sender.Tag.Over }})
     $button.Cursor = [Windows.Forms.Cursors]::Hand
-    $button=Place $Parent $button $X $Y $W $H
-    if($Rounded){
+
+    $button = Place $Parent $button $X $Y $W $H
+
+    # 圆角默认开启（原来要显式传 -Rounded，23 个调用里只传了 10 个，其余全是方角）
+    $wantRound = $true
+    if ($PSBoundParameters.ContainsKey('Rounded') -and -not $Rounded) { $wantRound = $false }
+    if ($wantRound) {
         Set-Round $button 8
-        # FlatAppearance 的边框是矩形，被 Region 裁完四角会剩直角，改自绘圆角边框
-        if($null -ne $Outline){
+        # Region 裁剪后 FlatAppearance 的矩形边框会剩直角，带描边的按钮改自绘圆角边框
+        if ($null -ne $Outline) {
             $button.FlatAppearance.BorderSize = 0
             $edge = $Outline
             $button.Add_Paint({param($sender,$eventArgs)
