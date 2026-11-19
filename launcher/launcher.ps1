@@ -46,6 +46,11 @@ public class PetDwm {
         var m = new M { l = -1, r = -1, t = -1, b = -1 }; DwmExtendFrameIntoClientArea(h, ref m); return hr; }
 }' -ErrorAction SilentlyContinue
 }
+# ---- 无边框窗体圆角：DWM 圆角对 FormBorderStyle=None 无效，用 SetWindowRgn 手工裁 ----
+if (-not ('PetRound' -as [type])) {
+    $sig = '[DllImport("gdi32.dll")] public static extern IntPtr CreateRoundRectRgn(int l,int t,int r,int b,int w,int h); [DllImport("user32.dll")] public static extern int SetWindowRgn(IntPtr h, IntPtr r, bool redraw); public static void Apply(IntPtr h, int w, int ht, int radius) { IntPtr rgn = CreateRoundRectRgn(0, 0, w + 1, ht + 1, radius * 2, radius * 2); SetWindowRgn(h, rgn, true); }'
+    Add-Type -MemberDefinition $sig -Name PetRound -PassThru -ErrorAction SilentlyContinue | Out-Null
+}
 $form = New-Object Windows.Forms.Form
 $form.Text = '大肥鱼桌宠 · 启动器'
 $form.Size = New-Object Drawing.Size(980,620)
@@ -58,6 +63,11 @@ if (Test-Path -LiteralPath $iconPath) { $form.Icon = New-Object Drawing.Icon($ic
 
 $form.Add_HandleCreated({
     try { [void][PetDwm]::Round($form.Handle) } catch { }
+    try { [PetRound]::Apply($form.Handle, $form.Width, $form.Height, 12) } catch { }
+})
+# 缩放时重新裁剪，否则圆角会消失
+$form.Add_Resize({
+    try { [PetRound]::Apply($form.Handle, $form.Width, $form.Height, 12) } catch { }
 })
 function Set-Round($Panel,[int]$Corner=12) {
     if ($Panel.Width -lt 24 -or $Panel.Height -lt 24) { return }
