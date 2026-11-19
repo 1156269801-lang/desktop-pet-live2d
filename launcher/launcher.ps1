@@ -163,9 +163,27 @@ function Button($Parent,[string]$Text,[int]$X,[int]$Y,[int]$W,[int]$H,$Fill=$car
     $button.Tag=@{Key=$null;Fill=$Fill;Over=$Fill;Down=$Fill}; Button-Skin $button $Fill
     $button.ForeColor=if($Fill -eq $accent){$logBg}else{$white}; $button.UseVisualStyleBackColor = $false
     if($null -ne $Outline){$button.FlatAppearance.BorderSize=1; $button.FlatAppearance.BorderColor=$Outline; $button.ForeColor=$Outline}
-    $button.Add_MouseEnter({param($sender,$eventArgs) if($sender.Enabled){$sender.BackColor=$sender.Tag.Over}})
-    $button.Add_MouseLeave({param($sender,$eventArgs) $sender.BackColor=$sender.Tag.Fill})
-    $button.Add_MouseDown({param($sender,$eventArgs) if($sender.Enabled -and $eventArgs.Button -eq 'Left'){$sender.BackColor=$sender.Tag.Down}})
+    # hover / active 状态标记，供内阴影绘制使用
+    $button.Add_MouseEnter({param($sender,$eventArgs) if($sender.Enabled){$sender.Tag.Hover=$true; $sender.BackColor=$sender.Tag.Over; $sender.Invalidate()}})
+    $button.Add_MouseLeave({param($sender,$eventArgs) $sender.Tag.Hover=$false; $sender.Tag.Active=$false; $sender.BackColor=$sender.Tag.Fill; $sender.Invalidate()})
+    # 内阴影：hover 时顶部 1px 高光 + 底部 1px 暗线，按下时反转为内凹
+    $button.Add_Paint({param($sender,$eventArgs)
+        if (-not $sender.Tag.Hover) { return }
+        $g = $eventArgs.Graphics; $g.SmoothingMode = 'AntiAlias'
+        $w = $sender.Width; $h = $sender.Height
+        if ($sender.Tag.Active) {
+            $top = [Drawing.Pen]::new([Drawing.Color]::FromArgb(70, 0, 0, 0), 1)
+            $bot = [Drawing.Pen]::new([Drawing.Color]::FromArgb(28, 255, 255, 255), 1)
+        } else {
+            $top = [Drawing.Pen]::new([Drawing.Color]::FromArgb(60, 255, 255, 255), 1)
+            $bot = [Drawing.Pen]::new([Drawing.Color]::FromArgb(48, 0, 0, 0), 1)
+        }
+        try {
+            $g.DrawLine($top, 10, 1, $w - 11, 1)
+            $g.DrawLine($bot, 10, $h - 2, $w - 11, $h - 2)
+        } finally { $top.Dispose(); $bot.Dispose() }
+    })
+    $button.Add_MouseDown({param($sender,$eventArgs) if($sender.Enabled -and $eventArgs.Button -eq 'Left'){$sender.Tag.Active=$true; $sender.BackColor=$sender.Tag.Down; $sender.Invalidate()}})
     $button.Add_MouseUp({param($sender,$eventArgs) if($sender.Enabled){$sender.BackColor=$sender.Tag.Over}})
     $button.Cursor = [Windows.Forms.Cursors]::Hand
     $button=Place $Parent $button $X $Y $W $H
